@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer
+#
+# The gate from the README, run automatically. Nothing here is fetched or
+# vendored beyond the compilers themselves: qcstats has no dependencies.
+
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc clang gcc-aarch64-linux-gnu
+
+      - name: Assert every toolchain is present
+        # `make check` SKIPS a compiler it cannot find, with a notice rather
+        # than a failure. That is right on a developer's machine and wrong
+        # here: a runner missing clang would report a green gate while having
+        # checked half of it. Fail loudly instead.
+        run: |
+          for c in gcc clang aarch64-linux-gnu-gcc; do
+            command -v "$c" >/dev/null 2>&1 || { echo "::error::missing toolchain: $c"; exit 1; }
+            printf '%-24s %s\n' "$c" "$("$c" --version | head -1)"
+          done
+
+      - name: make check
+        run: make check
+
+      - name: Cross-build for the board
+        # `make check` is native-only. char is unsigned on aarch64 and signed
+        # on x86, so the cross build is part of the gate, not a release step.
+        run: make cross
+
+      - name: Assert the cross build really produced an aarch64 binary
+        # e_machine lives at ELF offset 18; 0xb7 is aarch64. od rather than
+        # file(1), matching the Makefile: od is always present.
+        run: |
+          got=$(od -An -tx1 -j18 -N1 qcstats | tr -d ' \n')
+          echo "e_machine = 0x$got"
+          [ "$got" = "b7" ] || { echo "::error::not an aarch64 binary"; exit 1; }
+
+      - name: Every file carries an SPDX identifier
+        # The project's own convention, enforced. This is what a REUSE lint
+        # would check; doing it inline keeps the zero-dependency promise.
+        run: |
+          rc=0
+          for f in $(git ls-files); do
+            case "$f" in
+              LICENSE|LICENSES/*) continue ;;
+            esac
+            grep -qI "SPDX-License-Identifier:" "$f" 2>/dev/null \
+              || { echo "::error file=$f::no SPDX-License-Identifier"; rc=1; }
+          done
+          exit $rc
