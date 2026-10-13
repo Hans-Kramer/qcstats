@@ -145,7 +145,9 @@ It is **not** bumped for a new field.
   because a query costs ~1.12 ms and loads the DSP itself.
   Between polls the previous reading stands;
   it is a windowed average at most one period old.
-  It is dropped, not held, after three periods.
+  A reading is held until the next successful poll replaces it, so a sample's
+  `npu` object may repeat the previous values; a failed query clears it to
+  `null` rather than holding a stale number.
 - **`gpu_busy_pct` can be `null` while `gpu_mhz` is high.**
   The GPU's devfreq polling stops when it runtime-suspends,
   so a just-woken GPU may have no measured window yet.

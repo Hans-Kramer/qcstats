@@ -2,6 +2,23 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer -->
 # qcstats
 
+> [!CAUTION]
+> **Pre-release: `v0.1.0-pre`. No release has been published.**
+>
+> `qcstats` and its companion [`qcctl`](https://github.com/Hans-Kramer/qcctl)
+> target **one board** — the Arduino Ventuno Q (QCS8275). Nothing else is
+> tested, and the sampler reads paths that only exist there.
+>
+> The gate in this tree is **compilation only**: `gcc`, `clang` and the
+> `aarch64` cross build at `-Wall -Wextra -Werror`. There is **no automated
+> behavioural test suite yet**. Every figure in these docs was measured on
+> hardware by hand, which is not the same as being re-checked on every change.
+>
+> `qcstats` reads; it writes nothing to the system except the opt-in
+> `--gpu-busy` tracepoint, which it removes on exit. Interfaces may change
+> without notice before `0.1.0` — the JSON schema version is the only contract
+> intended to be stable, and it is `1`. Known gaps are in [`TODO.md`](TODO.md).
+
 A telemetry sampler for the **Arduino Ventuno Q**
 a.k.a. `monza` (Qualcomm QCS8275 / Dragonwing IQ-8275).
 
