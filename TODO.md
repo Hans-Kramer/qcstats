@@ -20,14 +20,13 @@ anything else is read from the source and not yet confirmed on hardware.
   off a coasting reading is reported as trustworthy. The window is otherwise exactly right:
   state 2 *is* pwm 51, and state 1 (pwm 26) is the only untrustworthy state. **[measured]**
 
-- **`io.c` — `src_u64()` does not check the `strtoull` endptr.** It tests only `errno`, so a
-  non-numeric attribute yields `0` with a success return — precisely the "a zero you did not
-  measure" failure the whole data model exists to prevent. Every sampler reads through this
-  function. The sibling project hardened its equivalent primitive; this one hardened the
-  `--count` caller instead, leaving the primitive exposed.
-
 - **`-h` / `--help` works but is absent from the `usage()` text.** Documented in
   `docs/USAGE.md` only.
+
+- **`gputrace.c` and `throttle.c` parse with `atoi`**, which cannot report failure at all —
+  junk reads as `0`. Lower risk than `src_u64()` was: both read a trace buffer whose format
+  `qcstats` itself enabled, rather than an arbitrary sysfs attribute. `throttle.c`'s
+  unguarded `strtoull` sum is in the same class.
 
 ---
 

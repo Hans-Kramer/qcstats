@@ -66,7 +66,7 @@ static int thermal_open(void)
 
 static void thermal_sample(struct sample *s)
 {
-    uint64_t mc;
+    uint64_t mc = 0;
 
     /* Every resolved zone always occupies its slot: a failed read sets ok=0 rather
      * than compacting, which would shift CSV columns mid-run and drop a JSON key. */

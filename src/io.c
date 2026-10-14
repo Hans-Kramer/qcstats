@@ -114,13 +114,19 @@ int src_str_ok(const struct src *s)
 
 int src_u64(const struct src *s, uint64_t *out)
 {
-    char buf[64];
+    char buf[64], *end;
+    uint64_t v;
 
     if (src_str(s, buf, sizeof buf) < 0)
         return -1;
     errno = 0;
-    *out = strtoull(buf, NULL, 10);
-    return errno ? -1 : 0;
+    v = strtoull(buf, &end, 10);
+    /* strtoull reports junk through endptr, not errno, and wraps a leading '-'
+     * (only whitespace, a sign and digits precede end). Assign on success only. */
+    if (errno || end == buf || memchr(buf, '-', (size_t)(end - buf)))
+        return -1;
+    *out = v;
+    return 0;
 }
 
 int read_file_str(const char *path, char *buf, size_t len)
