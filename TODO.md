@@ -34,15 +34,12 @@ anything else is read from the source and not yet confirmed on hardware.
 ## Gaps
 
 - **No automated behavioural gate.** `make check` is a compilation gate (gcc and clang,
-  `-Wall -Wextra -Werror` at `-O2`) and passes. `QCSTATS_SYSROOT` already relocates every read
-  onto a captured tree, so a suite would need no board and no root — the hook is built and
-  unused.
+  `-Wall -Wextra -Werror` at `-O2`) and passes; CI runs it, plus the cross build, on every
+  push. `QCSTATS_SYSROOT` already relocates every read onto a captured tree, so a suite would
+  need no board and no root — the hook is built and unused.
 
-- **No CI.** `.github/` is empty, and git does not track empty directories, so a fresh clone
-  has none at all. Nothing runs `make check` automatically.
-
-- **No release published.** `CHANGELOG.md` stays empty until there is one. The binary version
-  and the JSON schema version move independently; `-V` reports both.
+- **No release published.** The binary version and the JSON schema version move
+  independently; `-V` reports both.
 
 - **Paths nothing verifies:** the `--gpu-busy` tracepoint teardown after `SIGKILL` (the three
   handled signals are covered, and the normal restore leaves the tracepoint disabled and the
@@ -52,8 +49,5 @@ anything else is read from the source and not yet confirmed on hardware.
 
 ## Settled
 
-- **The name stays `qcstats`.** It pairs with `qcctl` — same prefix, observe/act split — which
-  carries the project's central architectural claim. `qc` is also the trademark-safest prefix
-  available, where a board or vendor name would weaken the disclaimer.
-- **No `CONTRIBUTING.md`.** The README's License section already states the policy:
-  inbound=outbound, no CLA, you keep your copyright.
+- **No `CONTRIBUTING.md`.** The README's License section states the policy: inbound=outbound,
+  no CLA, you keep your copyright.
