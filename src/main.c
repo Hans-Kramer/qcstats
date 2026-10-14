@@ -110,9 +110,11 @@ static int zones_from_list(char *list)
     return 0;
 }
 
-static void usage(const char *argv0)
+/* out is stdout when the user asked for help and stderr when this is a usage error, for
+ * the same reason version() uses stdout: `qcstats --help | less` has to show something. */
+static void usage(const char *argv0, FILE *out)
 {
-    fprintf(stderr,
+    fprintf(out,
         "usage: %s [--plain|--json|--csv] [--count N] [--interval MS]\n"
         "       %*s [--zones LIST | --all-zones] [--logfile P] [interval_ms]\n"
         "  --plain       compact single-line form, for reading (default)\n"
@@ -133,6 +135,7 @@ static void usage(const char *argv0)
         "  --logfile P   write samples to P instead of stdout. TRUNCATES P; stderr\n"
         "                notices still go to stderr. (A CSV header must not land\n"
         "                mid-file, which is why this truncates rather than appends.)\n"
+        "  -h, --help    print this and exit\n"
         "  -V, --version print the version and the JSON schema version, then exit\n"
         "  interval_ms   default 1000, floor %d\n"
         "\n"
@@ -226,7 +229,7 @@ int main(int argc, char *argv[])
             logpath = argv[++i];
         }
         else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            usage(argv[0]);
+            usage(argv[0], stdout);
             return 0;
         } else if (strcmp(argv[i], "-V") == 0 || strcmp(argv[i], "--version") == 0) {
             version();
@@ -239,7 +242,7 @@ int main(int argc, char *argv[])
             }
         } else {
             fprintf(stderr, "qcstats: unknown argument '%s'\n", argv[i]);
-            usage(argv[0]);
+            usage(argv[0], stderr);
             return 2;
         }
     }

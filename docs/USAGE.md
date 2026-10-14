@@ -64,8 +64,8 @@ Four details the usage line does not convey:
   a missing value is only detected at the end of the command line — so `--count --json`
   consumes `--json` as the count and fails on it.
 
-`-h` prints to **stderr**; `-V` prints to **stdout**, because `-V` is meant to be read by a
-script. `qcstats --help | less` shows nothing.
+`-h` and `-V` both print to **stdout** and exit 0, so `qcstats --help | less` works. A
+usage error prints the same text to **stderr** and exits 2.
 
 ## Choosing zones
 

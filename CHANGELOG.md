@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`--help` printed to stderr and did not list itself.** `-h` and `--help` were accepted
+  but absent from the usage text, and `usage()` wrote to stderr whether it was answering a
+  request for help or reporting a bad argument — so `qcstats --help | less` showed nothing.
+  Help now goes to stdout and exits 0, a usage error still goes to stderr and exits 2, and
+  both flags are listed. `docs/USAGE.md` had documented the old behaviour rather than
+  calling it a defect.
+
 - **`src_u64()` turned unparseable input into a measurement.** It tested only `errno`, but
   `strtoull` reports unparseable input through its end pointer — so a non-numeric attribute
   returned **0 with a success status**, and a leading `-` returned a silently wrapped huge
