@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aarch64 binary, by reading `e_machine` at ELF offset 18; and that every tracked file
   carries an SPDX identifier.
 
+### Removed
+
+- **`NPU_STALE_LIMIT` and its test from `npu.c`.** The test could not fire: `st.last_ms` is
+  stamped on every query *attempt*, and one happens as soon as the rate-limit period elapses,
+  so the age checked at publish time never reached the three periods the constant allowed.
+  Implementing it would have meant holding a reading for up to three periods after a query
+  had already failed — a number nobody measured, when the branch beside it clears the value
+  for exactly that reason. The hold is bounded by the rate limit alone.
+
 ### Fixed
 
 - **`--help` printed to stderr and did not list itself.** `-h` and `--help` were accepted

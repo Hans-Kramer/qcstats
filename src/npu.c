@@ -27,7 +27,8 @@
 //  1. A query costs ~1.12 ms AND LOADS THE DSP. Polling back-to-back put q6_util at
 //     ~50 % on an otherwise idle board - entirely self-inflicted. So this sampler
 //     rate-limits itself to NPU_MIN_PERIOD_MS regardless of --interval, and holds the
-//     last reading in between (bounded: see NPU_STALE_LIMIT).
+//     last reading in between - bounded by that period, since a query is attempted as
+//     soon as it elapses.
 //  2. The first window after init is partial - one run reported q6_clock = 1 - so the
 //     first reading is taken and discarded during open().
 
@@ -86,7 +87,6 @@ struct qc_process_type { int domain; int process_type; };
 
 #define LIBCDSPRPC       "libcdsprpc.so.1"
 #define NPU_MIN_PERIOD_MS 1000      /* never query the DSP faster than this */
-#define NPU_STALE_LIMIT   3         /* drop a held reading after N periods */
 
 /* What the DSP writes back. 14 floats + 1 uint; only four fields carry meaning. */
 struct npu_prof {
@@ -276,10 +276,10 @@ static void npu_sample(struct sample *s)
         }
     }
 
-    /* Between queries the held reading stands - it is a windowed average, at most
-     * one period old. Beyond NPU_STALE_LIMIT periods, report absent rather than
-     * present something that may no longer describe the DSP. */
-    if (st.have && (now - st.last_ms) <= (double)(NPU_MIN_PERIOD_MS * NPU_STALE_LIMIT)) {
+    /* Between queries the held reading stands: a windowed average, at most one period
+     * old because the next attempt fires as soon as the period elapses. A failed
+     * attempt clears st.have above, so nothing is held past the failure that found it. */
+    if (st.have) {
         s->npu_q6_pct  = st.val.q6_pct;
         s->npu_hvx_pct = st.val.hvx_pct;
         s->npu_hmx_pct = st.val.hmx_pct;

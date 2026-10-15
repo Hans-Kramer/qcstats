@@ -9,12 +9,6 @@ anything else is read from the source and not yet confirmed on hardware.
 
 ## Defects
 
-- **`npu.c` — `NPU_STALE_LIMIT` is unreachable dead code.** `st.last_ms` is reassigned on
-  every query *attempt*, so the staleness test can never exceed one period. A failed query
-  already drops the value via `st.have = 0`, which is the behaviour that actually ships.
-  `docs/json-schema-v1.md` has been corrected to describe that; the constant and its test
-  should now either be removed or made to work. **[measured]**
-
 - **`fan.c` — `rpm_valid` stays `true` during fan spin-down.** The distrust window is
   `0 < pwm < 51`, which excludes `pwm == 0`, so for a second or two after the fan is switched
   off a coasting reading is reported as trustworthy. The window is otherwise exactly right:
