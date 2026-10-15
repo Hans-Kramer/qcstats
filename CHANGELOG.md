@@ -31,6 +31,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`atoi` turned unparseable fields into measurements.** `throttle.c` took the IRQ number
+  out of a `dcvsh-irq-<N>` name with `atoi`, which returns 0 for anything it cannot parse —
+  and 0 is cpu0's own IRQ. Since the loop assigns rather than accumulates, a name it failed
+  on was charged to policy0 and *overwrote* that policy's real count: against a crafted
+  `/proc/interrupts`, a malformed `dcvsh-irq-x` line replaced policy0's 1000 events with its
+  own 10. `gputrace.c` read `load=` the same way, so an unparseable field became a confident
+  0 % GPU busy instead of an absent one. Both now require at least one digit and skip what
+  they cannot parse; `load` is range-checked too, since a percentage outside 0–100 is a
+  misparse rather than a reading.
+
+- **`gputrace.c` could parse half a trace line as a whole one.** It tokenised a 64 KB read
+  without allowing for the last line being cut in half by the read boundary. A full buffer
+  now drops its trailing partial line; the next read carries the remainder, which no longer
+  matches the device name and is skipped.
+
 - **`fan.rpm_valid` vouched for a fan that was commanded off but still spinning.** The
   distrust window was `0 < pwm < 51`, which covers state 1's tachometer misread but excludes
   `pwm == 0` — so for about a second after the fan is switched off, a coasting reading was

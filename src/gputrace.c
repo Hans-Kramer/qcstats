@@ -184,14 +184,31 @@ static void gpu_busy_sample(struct sample *s)
      * the most recent polling window, which is what we want to report. */
     while ((n = read(st.fd, buf, sizeof buf - 1)) > 0) {
         buf[n] = '\0';
+        /* A full buffer means the last line is probably cut in half, and half a line
+         * tokenises as a whole one. Drop it: the next read carries the remainder, which
+         * no longer contains the device name and is skipped below. */
+        if (n == (ssize_t)(sizeof buf - 1)) {
+            char *nl = strrchr(buf, '\n');
+            if (!nl)
+                continue;
+            *nl = '\0';
+        }
         for (line = strtok_r(buf, "\n", &save); line;
              line = strtok_r(NULL, "\n", &save)) {
+            char *end;
+            long v;
+
             if (!strstr(line, GPU_DEVFREQ_NAME))
                 continue;
             p = strstr(line, "load=");
             if (!p)
                 continue;
-            load  = atoi(p + 5);
+            /* atoi turned an unparseable field into 0 and reported it as a measurement.
+             * load is a percentage, so anything outside 0-100 is a misparse, not a read. */
+            v = strtol(p + 5, &end, 10);
+            if (end == p + 5 || v < 0 || v > 100)
+                continue;
+            load  = (int)v;
             fresh = 1;
         }
         if (n < (ssize_t)(sizeof buf - 1))

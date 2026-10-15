@@ -45,13 +45,18 @@ static void throttle_sample(struct sample *s)
     for (line = strtok_r(blob, "\n", &save); line;
          line = strtok_r(NULL, "\n", &save)) {
         char *tag = strstr(line, "dcvsh-irq-");
-        char *p;
+        char *p, *end;
         int which, slot = -1;
         uint64_t sum = 0;
 
         if (!tag)
             continue;
-        which = atoi(tag + strlen("dcvsh-irq-"));    /* 0, 2 or 4 */
+        tag += strlen("dcvsh-irq-");
+        /* Must be dcvsh-irq-<number>. atoi read anything else as 0, which is cpu0's own
+         * IRQ, so a name it could not parse was counted against policy0. */
+        which = (int)strtol(tag, &end, 10);         /* 0, 2 or 4 */
+        if (end == tag)
+            continue;
         for (int i = 0; i < NPOLICY; i++)
             if (POLICY_CPU[i] == which)
                 slot = i;

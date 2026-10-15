@@ -9,10 +9,7 @@ anything else is read from the source and not yet confirmed on hardware.
 
 ## Defects
 
-- **`gputrace.c` and `throttle.c` parse with `atoi`**, which cannot report failure at all —
-  junk reads as `0`. Lower risk than `src_u64()` was: both read a trace buffer whose format
-  `qcstats` itself enabled, rather than an arbitrary sysfs attribute. `throttle.c`'s
-  unguarded `strtoull` sum is in the same class.
+None open.
 
 ---
 
