@@ -9,11 +9,6 @@ anything else is read from the source and not yet confirmed on hardware.
 
 ## Defects
 
-- **`fan.c` — `rpm_valid` stays `true` during fan spin-down.** The distrust window is
-  `0 < pwm < 51`, which excludes `pwm == 0`, so for a second or two after the fan is switched
-  off a coasting reading is reported as trustworthy. The window is otherwise exactly right:
-  state 2 *is* pwm 51, and state 1 (pwm 26) is the only untrustworthy state. **[measured]**
-
 - **`gputrace.c` and `throttle.c` parse with `atoi`**, which cannot report failure at all —
   junk reads as `0`. Lower risk than `src_u64()` was: both read a trace buffer whose format
   `qcstats` itself enabled, rather than an arbitrary sysfs attribute. `throttle.c`'s

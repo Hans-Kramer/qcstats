@@ -42,8 +42,13 @@ static void fan_sample(struct sample *s)
     s->fan_duty_pct = pwm * 100 / 255;
     s->fan_rpm      = rpm;
     s->fan_ok       = 1;
-    /* The tach misread below state 2 is only meaningful if duty was readable. */
-    s->fan_rpm_valid = s->fan_duty_ok ? !(pwm > 0 && pwm < 51) : 0;
+    /* Untrustworthy in two cases: state 1 (pwm 1-50), where the tach reads high, and a fan
+     * commanded off that is still coasting - real rpm, but it describes no duty. Both reads
+     * are required: a flag vouching for an absent rpm says nothing. Settling after any
+     * other change needs an expected-rpm reference this tool does not hold. */
+    s->fan_rpm_valid = (s->fan_duty_ok && s->fan_rpm_ok
+                        && !(pwm > 0 && pwm < 51)
+                        && !(pwm == 0 && rpm > 0));
 }
 
 static void fan_close(void)

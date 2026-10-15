@@ -123,7 +123,7 @@ It is **not** bumped for a new field.
 | `fan` | object \| null | | EMC2305 |
 | `fan.duty_pct` | int \| null | % | derived from `pwm1` |
 | `fan.rpm` | int \| null | rpm | |
-| `fan.rpm_valid` | bool | — | `false` when duty is below state 2, where the tachometer misreads |
+| `fan.rpm_valid` | bool | — | `false` below state 2 (tachometer misreads), while a fan commanded off is still coasting, or when either reading is absent |
 | `throttle` | object | | keyed by policy label |
 | `throttle.<label>` | int \| null | events | LMh/DCVSh **event counts, not depth** |
 
@@ -136,8 +136,10 @@ It is **not** bumped for a new field.
   the fan's active trip is 38 °C while the CPU's own first passive trip is 126 °C,
   so on this board throttling is effectively unreachable.
   A 0 is meaningful; a `null` means `/proc/interrupts` could not be read.
-- **`fan.rpm_valid: false`** means `rpm` is present but untrustworthy, not that the fan is broken.
-  And `rpm: 0` usually means the fan is simply off.
+- **`fan.rpm_valid: false`** means the reading cannot be attributed to the current duty, not
+  that the fan is broken. `rpm: 0` with `rpm_valid: true` means the fan is simply off; a
+  non-zero `rpm` alongside `duty_pct: 0` is a fan still coasting down, and is flagged
+  `false` because no duty describes it.
 - **`npu.hmx_pct` is often 0 even under heavy AI load.**
   Quantised llama.cpp paths use the HVX vector units, not the HMX matrix engine.
   A zero means "this workload did not use HMX", not a broken counter.

@@ -31,6 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`fan.rpm_valid` vouched for a fan that was commanded off but still spinning.** The
+  distrust window was `0 < pwm < 51`, which covers state 1's tachometer misread but excludes
+  `pwm == 0` — so for about a second after the fan is switched off, a coasting reading was
+  flagged trustworthy. Measured on a Ventuno Q: `duty_pct: 0` beside `rpm: 5160` and
+  `rpm_valid: true`, a pairing no duty can describe. It is now `false` while a fan commanded
+  off is still turning, and also `false` when either reading is absent, since a flag
+  vouching for a `null` rpm says nothing.
+
+  Settled readings are unchanged: state 0 off is still `rpm: 0` with `rpm_valid: true`,
+  state 1 is still `false`, and states 2 and up still `true`. Settling after any other
+  change is left to the consumer, because judging it needs an expected-rpm reference this
+  tool deliberately does not hold.
+
 - **`--help` printed to stderr and did not list itself.** `-h` and `--help` were accepted
   but absent from the usage text, and `usage()` wrote to stderr whether it was answering a
   request for help or reporting a bad argument — so `qcstats --help | less` showed nothing.

@@ -201,9 +201,12 @@ Frequency is **per policy, not per core**. Anything keyed on `cpu0` alone silent
 thirds of the machine.
 
 The fan's tachometer misreads below state 2 (`pwm1` under 51) — state 1 reports about
-3172 rpm against a 5140 rpm maximum — so `rpm` is still reported but `rpm_valid` is false.
-It is also false whenever `pwm1` itself could not be read, because the test cannot be
-evaluated. `rpm: 0` with `rpm_valid: true` means the fan is simply off.
+3500 rpm against a 5160 rpm maximum, higher than state 4 does — so `rpm` is still reported
+but `rpm_valid` is false. It is also false for about a second after the fan is commanded
+off, while it coasts: `duty_pct: 0` beside a non-zero `rpm` is a real reading that no duty
+describes. And false whenever either `pwm1` or the tachometer could not be read, since the
+test cannot be evaluated and a flag vouching for an absent `rpm` says nothing. `rpm: 0`
+with `rpm_valid: true` means the fan is simply off.
 
 Throttle counters read `0` in essentially all use, and that is a true reading: the fan's
 active trip is 38 °C while the CPU's own first passive trip is 126 °C, so with a working fan
