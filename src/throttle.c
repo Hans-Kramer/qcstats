@@ -21,6 +21,7 @@
 #include "sampler.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 static struct src interrupts;
@@ -32,15 +33,31 @@ static int throttle_open(void)
     return src_have(&interrupts) ? 0 : -1;
 }
 
+/* Said once, not every tick: a buffer too small for this machine is a standing condition,
+ * and a sampler that repeats it drowns the stream it is meant to carry. */
+static int warned_trunc;
+
 static void throttle_sample(struct sample *s)
 {
+    int rc;
     static char blob[65536];            /* /proc/interrupts is large on 8 cores */
     char *line, *save = NULL;
 
     /* 0 events means nothing throttled, which is a real and important reading.
-     * An unreadable /proc/interrupts must not claim it. */
-    if (src_str(&interrupts, blob, sizeof blob) < 0)
+     * An unreadable /proc/interrupts must not claim it - nor a truncated one, which would
+     * report 0 for every policy whose line fell past the cut. src_str_all() refuses a read
+     * that filled the buffer, so the whole object goes absent instead. */
+    rc = src_str_all(&interrupts, blob, sizeof blob);
+    if (rc < 0) {
+        /* Only for a genuine truncation. A missing attribute is routine and was
+         * silent before; saying both with one sentence tells the operator neither. */
+        if (rc == -2 && !warned_trunc) {
+            warned_trunc = 1;
+            fprintf(stderr, "qcstats: %s exceeds the %zu-byte buffer; throttle counters "
+                    "reported absent\n", PROC_INTERRUPTS, sizeof blob);
+        }
         return;                         /* thr_ok stays 0 */
+    }
     s->thr_ok = 1;
     for (line = strtok_r(blob, "\n", &save); line;
          line = strtok_r(NULL, "\n", &save)) {

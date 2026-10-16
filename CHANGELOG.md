@@ -31,6 +31,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A truncated read was reported as a whole file.** `src_str()` does a single `pread` of
+  `len - 1` and returns success for any positive count, so content larger than the buffer
+  was silently cut and the caller told it had read all of it. `throttle.c` would then report
+  **0** events for every policy whose line fell past the cut — and 0 is a meaningful reading
+  here, "nothing throttled" — so those policies got a zero nobody measured.
+
+  The two callers that parse a whole file now use `src_str_all()`, which refuses a read that
+  filled the buffer, and report the object absent instead. `src_str()` is deliberately
+  unchanged: `src_str_ok()` reads 7 bytes of an arbitrarily long attribute on purpose to
+  test readability, so truncation is a property of the caller's intent rather than of the
+  read, and a fail-on-full-buffer contract there would break every probe in the project.
+
+  It distinguishes the two failures — `-1` unreadable, `-2` filled the buffer, both testing
+  as `< 0` — because a missing attribute is routine and stays silent as before, while a
+  buffer too small for the machine is a standing fault worth saying once:
+
+  ```
+  qcstats: /proc/meminfo exceeds the 8192-byte buffer; memory reported absent
+  ```
+
+  Not reachable on a Ventuno Q — `/proc/interrupts` is 21,602 bytes against 65,535 and
+  `/proc/meminfo` 1,504 against 8,191 — but both scale with CPU count, and running on
+  hardware this was not built for is an open item in [`TODO.md`](TODO.md).
+
 - **`atoi` turned unparseable fields into measurements.** `throttle.c` took the IRQ number
   out of a `dcvsh-irq-<N>` name with `atoi`, which returns 0 for anything it cannot parse —
   and 0 is cpu0's own IRQ. Since the loop assigns rather than accumulates, a name it failed

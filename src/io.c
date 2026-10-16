@@ -93,7 +93,7 @@ void src_open_abs(struct src *s, const char *dir, const char *attr)
           ? open(path, O_RDONLY | O_CLOEXEC) : -1;
 }
 
-int src_str(const struct src *s, char *buf, size_t len)
+static ssize_t src_read(const struct src *s, char *buf, size_t len)
 {
     ssize_t n;
 
@@ -103,7 +103,39 @@ int src_str(const struct src *s, char *buf, size_t len)
     if (n <= 0)
         return -1;
     buf[n] = '\0';
-    return 0;
+    return n;
+}
+
+int src_str(const struct src *s, char *buf, size_t len)
+{
+    return src_read(s, buf, len) < 0 ? -1 : 0;
+}
+
+/* src_str() for callers that parse the WHOLE file, and so cannot accept a read that
+ * stopped at the buffer. /proc content is generated on demand and grows with the number
+ * of CPUs, devices and interrupts, so a buffer sized against one machine can truncate on
+ * another - and a truncated interrupt table loses the names, which sit at the far end of
+ * the longest lines.
+ *
+ * src_str() itself must not refuse this: src_str_ok() reads 7 bytes of an arbitrarily long
+ * attribute on purpose, to test readability. Truncation is a property of the caller's
+ * intent, not of the read.
+ *
+ * A file whose size is exactly len-1 is refused too. That is deliberate: there is no way
+ * to tell it from a truncation, and reporting absent is the safe direction.
+ *
+ * Returns 0 for the whole file, -1 if it could not be read, and -2 if the read filled the
+ * buffer. Those last two are both failures and both test as < 0, but they are different
+ * conditions: a missing attribute is routine and a buffer too small for this machine is a
+ * standing fault, and a caller that reports them with one sentence tells the operator
+ * neither. */
+int src_str_all(const struct src *s, char *buf, size_t len)
+{
+    ssize_t n = src_read(s, buf, len);
+
+    if (n < 0)
+        return -1;
+    return ((size_t)n == len - 1) ? -2 : 0;
 }
 
 int src_str_ok(const struct src *s)

@@ -53,6 +53,9 @@ void src_close(struct src *s);
 void src_open(struct src *s, const char *fmt, ...);
 void src_open_abs(struct src *s, const char *dir, const char *attr);
 int  src_str(const struct src *s, char *buf, size_t len);
+// For callers that parse the whole file: fails rather than return a truncated read.
+// 0 = whole file, -1 = unreadable, -2 = filled the buffer. Both negatives are failures.
+int  src_str_all(const struct src *s, char *buf, size_t len);
 int  src_u64(const struct src *s, uint64_t *out);
 static inline int src_have(const struct src *s) { return s->fd >= 0; }
 /* Whether a read succeeds *now* - an fd can be open and still yield nothing. */
