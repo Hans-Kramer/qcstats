@@ -22,7 +22,7 @@ CFLAGS  += -std=gnu11 -Wall -Wextra
 # NOTE: this is the SAMPLER's version and is independent of the JSON schema version,
 # which is the consumer contract and lives in docs/json-schema-v1.md. The schema is
 # bumped only for a breaking change; this moves whenever the code does.
-VERSION ?= 0.1.0-pre
+VERSION ?= 0.1.0
 CFLAGS  += -DQCSTATS_VERSION=\"$(VERSION)\"
 
 DESTDIR ?=
@@ -56,6 +56,13 @@ $(TARGET): $(OBJS)
 # -MMD -MP generates the header dependencies below. Without them, editing a header
 # left stale objects linked against a DIFFERENT struct sample layout - undefined
 # behaviour that surfaced as a wrong CPU percentage rather than a crash.
+# The version is baked into every object through CFLAGS, and make does not track CFLAGS: a
+# bumped VERSION with existing objects produced a binary that REPORTED THE OLD ONE. `make
+# cross` cleans first, so the staged board build was never exposed to it; a native build was,
+# and a release is defined by exactly this string. Depending on the Makefile is cruder than a
+# version stamp file and needs no new machinery: editing it rebuilds thirteen small objects.
+$(OBJS): Makefile
+
 $(SRCDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 

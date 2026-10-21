@@ -3,7 +3,7 @@
 # qcstats
 
 > [!CAUTION]
-> **Pre-release: `v0.1.0-pre`. No release has been published.**
+> **`v0.1.0` — the first release.** It targets one board and nothing else.
 >
 > `qcstats` and its companion [`qcctl`](https://github.com/Hans-Kramer/qcctl)
 > target **one board** — the Arduino Ventuno Q (QCS8275). Nothing else is
@@ -18,9 +18,14 @@
 > presents. **Every figure in these docs was measured on hardware by hand.**
 >
 > `qcstats` reads; it writes nothing to the system except the opt-in
-> `--gpu-busy` tracepoint, which it removes on exit. Interfaces may change
-> without notice before `0.1.0` — the JSON schema version is the only contract
-> intended to be stable, and it is `1`. Known gaps are in [`TODO.md`](TODO.md).
+> `--gpu-busy` tracepoint, which it removes on exit.
+>
+> **What `0.1.0` promises, and what it does not.** The JSON schema is the one
+> contract meant to be stable, and it is version `1`: a field is never renamed
+> or retyped without that number changing, and `qcctl` refuses a line of any
+> other version rather than guessing. Everything else is `0.x` in the ordinary
+> sense — the command line and the human and CSV formats may change in a minor
+> release. Known gaps are in [`TODO.md`](TODO.md).
 
 A telemetry sampler for the **Arduino Ventuno Q**
 a.k.a. `monza` (Qualcomm QCS8275 / Dragonwing IQ-8275).

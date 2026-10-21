@@ -318,7 +318,7 @@ columns on every row.
 
 ```console
 $ qcstats -V
-qcstats 0.1.0-pre
+qcstats 0.1.0
 json-schema 1
 ```
 

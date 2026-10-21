@@ -31,8 +31,10 @@ None open.
   trees for shapes this board cannot show are the cheaper half of that, because they need no
   board to write.
 
-- **No release published.** The binary version and the JSON schema version move
-  independently; `-V` reports both.
+- **The binary version and the JSON schema version move independently.** `-V` reports both,
+  and they are not the same number: `0.1.0` is this program, `1` is the stream contract that
+  `qcctl` parses. A release of this project does not imply a schema bump, and a schema bump
+  would not wait for one.
 
 - **Paths nothing verifies:** the `--gpu-busy` tracepoint teardown after `SIGKILL` (the three
   handled signals are covered, and the normal restore leaves the tracepoint disabled and the
