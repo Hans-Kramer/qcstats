@@ -17,9 +17,14 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # PINNED, not `ubuntu-latest`. The board runs Ubuntu 24.04, and matching it is the
+    # point: the scripts here are POSIX shell run by dash and lean on awk, sed and od, so
+    # the runner's userspace is part of what is being tested. GitHub began migrating
+    # `ubuntu-latest` to Ubuntu 26 on 2026-10-19, which would have moved the gate off the
+    # board's version silently.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchains
         run: |
@@ -46,10 +51,15 @@ jobs:
         run: |
           out=$(make test 2>&1) || { printf '%s\n' "$out"; exit 1; }
           printf '%s\n' "$out"
-          # A shell test that skips is a test that is not running. On a runner there is
-          # nothing to be missing, so a skip is a fault, not a notice.
-          if printf '%s\n' "$out" | grep -q SKIPPED; then
-            echo "::error::a test skipped in CI, where it has to run"
+          # A test that skips is a test that is not running, so a skip here has to be one we
+          # can name. Exactly one can be: tests/sh/t_install.sh stages a NATIVE build, which
+          # needs the sibling qcstats, and this job checks out qcctl alone - the `contract`
+          # job has both repos and runs it for real, which is why a skip is fatal there.
+          # Anything else skipping is a fault.
+          unexpected=$(printf '%s\n' "$out" | grep SKIPPED | grep -cv 't_install') || true
+          if [ "${unexpected:-0}" != 0 ]; then
+            printf '%s\n' "$out" | grep SKIPPED | grep -v 't_install'
+            echo "::error::a test skipped in CI for a reason this job does not expect"
             exit 1
           fi
 
@@ -93,7 +103,7 @@ jobs:
     # which would be a cross build to the machine it is already running on.
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchains
         run: |
@@ -107,10 +117,15 @@ jobs:
         run: |
           out=$(make test 2>&1) || { printf '%s\n' "$out"; exit 1; }
           printf '%s\n' "$out"
-          # A shell test that skips is a test that is not running. On a runner there is
-          # nothing to be missing, so a skip is a fault, not a notice.
-          if printf '%s\n' "$out" | grep -q SKIPPED; then
-            echo "::error::a test skipped in CI, where it has to run"
+          # A test that skips is a test that is not running, so a skip here has to be one we
+          # can name. Exactly one can be: tests/sh/t_install.sh stages a NATIVE build, which
+          # needs the sibling qcstats, and this job checks out qcctl alone - the `contract`
+          # job has both repos and runs it for real, which is why a skip is fatal there.
+          # Anything else skipping is a fault.
+          unexpected=$(printf '%s\n' "$out" | grep SKIPPED | grep -cv 't_install') || true
+          if [ "${unexpected:-0}" != 0 ]; then
+            printf '%s\n' "$out" | grep SKIPPED | grep -v 't_install'
+            echo "::error::a test skipped in CI for a reason this job does not expect"
             exit 1
           fi
 
