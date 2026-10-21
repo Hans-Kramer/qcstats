@@ -95,6 +95,18 @@ static void cpu_sample(struct sample *s)
     /* Frequencies come from cpufreq and are independent of /proc/stat, so they are
      * still reported when load is not. */
     s->load_ok = have && st.primed;
+    /* A zero delta is not a measurement. Between two reads of a live /proc/stat something
+     * always advances, so this cannot happen on a board; against a CAPTURED tree it always
+     * does, and reporting 0% there would be a percentage nobody measured - the one output
+     * this sampler must never produce. Found by the first fixture run. */
+    if (s->load_ok) {
+        int moved = 0;
+
+        for (int c = 0; c < NCPU; c++)
+            if (cur[c].total != st.prev[c].total)
+                moved = 1;
+        s->load_ok = moved;
+    }
     for (int p = 0; p < NPOLICY; p++) {
         int first = POLICY_CPU[p];
         int last  = (p + 1 < NPOLICY) ? POLICY_CPU[p + 1] - 1 : NCPU - 1;

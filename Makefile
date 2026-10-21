@@ -38,7 +38,15 @@ SRCS   := $(SRCDIR)/main.c $(SRCDIR)/io.c $(SRCDIR)/emit.c \
 OBJS   := $(SRCS:.c=.o)
 DEPS   := $(OBJS:.o=.d)
 
-.PHONY: all check cross clean install uninstall
+# Behavioural tests. Each tests/t_*.c is a main() of its own, so they are linked one at a
+# time against every object except main.o - which brings the program's own main().
+# Wildcarded: a new test file is picked up without editing this list, because a test that
+# exists and is never run is worse than no test.
+TESTSRC := $(wildcard tests/t_*.c)
+TESTS   := $(patsubst tests/%.c,tests/bin/%,$(TESTSRC))
+TESTOBJS := $(filter-out $(SRCDIR)/main.o,$(OBJS))
+
+.PHONY: all check test tests cross clean install uninstall
 
 all: $(TARGET)
 
@@ -63,10 +71,38 @@ check:
 	    command -v $$cc >/dev/null 2>&1 || { echo "== $$cc not installed, skipped"; continue; }; \
 	    echo "== $$cc"; \
 	    $$cc $(CFLAGS) -Werror -o /dev/null $(SRCS) || exit 1; \
+	    for t in $(TESTSRC); do \
+	        $$cc $(CFLAGS) -Werror -c -o /dev/null $$t || exit 1; \
+	    done; \
 	    ran="$$ran $$cc"; \
 	done; \
 	[ -n "$$ran" ] || { echo "== no C compiler found - NOTHING was checked"; exit 1; }; \
-	echo "== clean under -Wall -Wextra -Werror at -O2:$$ran"
+	echo "== clean under -Wall -Wextra -Werror at -O2:$$ran (sources and tests)"
+
+# Build the tests without running them, which is what a cross build needs: those binaries
+# are for the board and this machine cannot execute them.
+tests: $(TESTS)
+
+# The behavioural suite. `check` is the compilation gate and stays that; this runs code.
+# Each test prints its own line and returns non-zero if anything failed OR if it checked
+# nothing at all - see tests/t.h.
+# The shell half needs the BINARY, because the flag surface is only reachable through
+# argv - the C tests link every object but main.o.
+test: $(TESTS) $(TARGET)
+	@[ -n "$(TESTS)" ] || { echo "== no tests found in tests/"; exit 1; }
+	@fail=0; for t in $(TESTS); do ./$$t || fail=1; done; \
+	 sh tests/sh/run.sh || fail=1; \
+	 [ "$$fail" = 0 ] || { echo "== TESTS FAILED"; exit 1; }; \
+	 echo "== tests passed"
+
+# Into tests/bin/ so one .gitignore line covers every test binary. A build artifact that
+# becomes trackable by being renamed is a trap this tree has already fallen into once.
+tests/bin/%: tests/%.c tests/t.h $(TESTOBJS)
+	@mkdir -p tests/bin
+	$(CC) $(CFLAGS) -MMD -MP -o $@ $< $(TESTOBJS) $(LDFLAGS)
+
+# The tests' own header dependencies, so editing qcstats.h rebuilds the test that pins it.
+-include $(TESTS:%=%.d)
 
 # Cross-build for the board. 'char' is UNSIGNED on aarch64 and signed on x86, among other
 # differences, so a host-only build cannot see a whole class of bug.
@@ -85,6 +121,7 @@ cross:
 
 clean:
 	rm -f $(TARGET) $(OBJS) $(DEPS)
+	rm -rf tests/bin
 
 # qcstats is a sampler and never writes to the system, so it needs no
 # privileges and no setuid bit.

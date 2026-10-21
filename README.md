@@ -9,10 +9,13 @@
 > target **one board** — the Arduino Ventuno Q (QCS8275). Nothing else is
 > tested, and the sampler reads paths that only exist there.
 >
-> The gate in this tree is **compilation only**: `gcc`, `clang` and the
-> `aarch64` cross build at `-Wall -Wextra -Werror`. There is **no automated
-> behavioural test suite yet**. Every figure in these docs was measured on
-> hardware by hand, which is not the same as being re-checked on every change.
+> The gate in this tree compiles under `gcc`, `clang` and the `aarch64` cross
+> build at `-Wall -Wextra -Werror`, and runs **226 behavioural checks** — `io.c`,
+> the emitters in all three output formats, every sampler against a captured
+> board, the arithmetic on its own, and the command line itself — on x86-64 and
+> on `aarch64`. A fixture is a photograph of one board's sysfs: it proves what the
+> code does with that shape, never that the shape is still what a kernel
+> presents. **Every figure in these docs was measured on hardware by hand.**
 >
 > `qcstats` reads; it writes nothing to the system except the opt-in
 > `--gpu-busy` tracepoint, which it removes on exit. Interfaces may change

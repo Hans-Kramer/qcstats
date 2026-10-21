@@ -15,10 +15,21 @@ None open.
 
 ## Gaps
 
-- **No automated behavioural gate.** `make check` is a compilation gate (gcc and clang,
-  `-Wall -Wextra -Werror` at `-O2`) and passes; CI runs it, plus the cross build, on every
-  push. `QCSTATS_SYSROOT` already relocates every read onto a captured tree, so a suite would
-  need no board and no root — the hook is built and unused.
+- **The suite proves one board shape.** `make test` runs 226 checks on every push and on
+  `ubuntu-24.04-arm`, covering `io.c`, all three emitters, every sampler against a captured
+  tree, the arithmetic on its own, and the command line through `argv`.
+
+  The command line is covered as of 2026-10-19: `tests/sh/t_cli.sh` drives the built binary
+  through `argv` — all three output formats and which one wins when two are given, every
+  exit-2 refusal, `--count`'s line arithmetic, `--logfile`, and zone selection including a
+  name nothing matches.
+
+  What is left: `--gpu-busy`'s tracepoint path when it *succeeds*, which needs root — the
+  unprivileged refusal is asserted, and the branch is chosen by the same `access()` probe the
+  code uses so it cannot false-fail where tracefs is readable. And a **second fixture**, because one
+  captured tree proves the code handles that shape and says nothing about another. Synthetic
+  trees for shapes this board cannot show are the cheaper half of that, because they need no
+  board to write.
 
 - **No release published.** The binary version and the JSON schema version move
   independently; `-V` reports both.

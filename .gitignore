@@ -8,3 +8,7 @@
 *.o
 qcstats
 *.d
+
+# Compiled tests. The whole directory, so a new or renamed test binary cannot become
+# trackable by escaping a name in this list.
+/tests/bin/
