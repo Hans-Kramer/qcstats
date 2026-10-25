@@ -183,11 +183,39 @@ else
     t_has "$err" "root-only" "and where it is not, it says tracefs is root-only"
 fi
 
-# --npu enables a probe this fixture has nothing for. Accepted, and the field stays null -
-# which is Schema rule 1 doing its job rather than a flag doing nothing.
+# --npu enables a probe that needs the vendor FastRPC library and a DSP that answers.
+# NEITHER is relocatable by a sysroot: the library is resolved with dlopen and the device is
+# /dev/fastrpc-*, so the fixture decides nothing here and the environment decides everything.
+# This asserted the field was null, which is true off the board and false ON it - so the
+# suite failed on the only hardware it targets, having passed everywhere it does not. What
+# is asserted now is the CONTRACT, which holds in both: the field is null or the documented
+# object, and never a bare zero. Both branches spend the same number of checks, so the
+# total does not depend on where it ran.
 run --json --count 1 --npu
 t_eq "$rc" 0 "--npu is accepted"
-t_has "$out" '"npu":null' "and an absent NPU reads null, not 0"
+npu=$(printf '%s\n' "$out" | tail -1 | sed -n 's/.*"npu":\({[^}]*}\).*/\1/p')
+[ -n "$npu" ] || npu=$(printf '%s\n' "$out" | tail -1 | sed -n 's/.*"npu":\([a-z]*\).*/\1/p')
+case "$npu" in
+    null)
+        t_ok 0 "an unreachable NPU reads null, not 0"
+        t_hasnt "$out" '"npu":0' "and never a bare zero"
+        ;;
+    '{'*'}')
+        miss=0
+        for k in q6_pct q6_khz hvx_pct hmx_pct; do
+            case "$npu" in *"\"$k\":"*) ;; *) miss=$((miss + 1)) ;; esac
+        done
+        t_eq "$miss" 0 "a reachable NPU reports all four documented fields"
+        oor=$(printf '%s\n' "$npu" | tr ',' '\n' \
+              | sed -n 's/.*"q6_pct":\([0-9.]*\).*/\1/p; s/.*"hvx_pct":\([0-9.]*\).*/\1/p; s/.*"hmx_pct":\([0-9.]*\).*/\1/p' \
+              | awk '$1 < 0 || $1 > 100 { n++ } END { print n + 0 }')
+        t_eq "$oor" 0 "and its three percentages are percentages"
+        ;;
+    *)
+        t_ok 1 "the npu field is neither null nor an object: '$npu'"
+        t_ok 1 "so nothing about its shape could be checked"
+        ;;
+esac
 
 # --- the sysroot is reported, not silent ----------------------------------------------
 

@@ -75,7 +75,7 @@ That is it working. Press **Ctrl+C** at any time to stop it.
 make test
 ```
 
-240 checks: the readers, the three output formats, every sampler against a captured board's
+241 checks: the readers, the three output formats, every sampler against a captured board's
 sysfs, the arithmetic, the command line, and `make install` into a staging directory. They
 need no board and no root — a fixture in `tests/fixtures/` stands in for the hardware, and
 `QCSTATS_SYSROOT` is what points the program at it.

@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **`make test` failed on the only hardware this targets.** `tests/sh/t_cli.sh` asserted
+  that `--npu` leaves the field `null`, which is true on a CI runner and on a workstation
+  and **false on a Ventuno Q**: there the FastRPC probe answers and the field is the
+  documented object, so the suite failed on the board while passing everywhere it does
+  not. Neither half of that probe is relocatable by `QCSTATS_SYSROOT` - the library is
+  resolved with `dlopen` and the device is `/dev/fastrpc-*` - so the fixture decided
+  nothing and the environment decided everything. The check now asserts the *contract*
+  instead: the field is `null` or an object carrying all four documented keys, never a bare
+  zero, with the percentages checked to be percentages. Both branches spend the same number
+  of checks, so the total does not depend on where the suite ran. Proven failable on the
+  board by renaming one key in the object and by scaling `q6_pct` out of range (241 checks
+  now, up from 240).
+
+  Found by installing the published release on the board rather than a binary built here,
+  which is the only way this could surface: every environment the gate can reach lacks the
+  DSP that makes the assertion wrong.
+
+### Added
+
+- **`README.md`: how to install from a GitHub release.** The published source tarball,
+  built on the board itself after installing a toolchain - the board image ships none,
+  which `docs/BUILD.md` has always said and the first draft of this section contradicted -
+  plus what `make install` puts on disk (two paths) and that `make uninstall` needs the
+  extracted directory to remove them. Verified end to end on hardware: tarball fetched from the release, checked
+  file-for-file against the `v0.1.0` tag (1177 files, every hash equal), built, installed,
+  uninstalled with nothing left behind, and reinstalled.
+
+---
+
 ## [0.1.0] - 2026-10-25
 
 ### Added

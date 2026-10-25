@@ -59,6 +59,27 @@ sudo make install          # /usr/local/bin, on the board's default PATH
 qcstats --count 1
 ```
 
+### Install from GitHub
+
+A release builds on the board itself, once there is a toolchain — the board image has
+none:
+
+```sh
+sudo apt update && sudo apt install -y build-essential
+curl -fsSLO https://github.com/Hans-Kramer/qcstats/archive/refs/tags/v0.1.0.tar.gz
+tar xzf v0.1.0.tar.gz
+cd qcstats-0.1.0
+make
+sudo make install
+```
+
+Substitute the tag of whichever release you want; the same tarball is the *Source code
+(tar.gz)* link on the release page.
+
+`make install` places exactly two files — `/usr/local/bin/qcstats` and
+`/usr/local/share/man/man1/qcstats.1` — and `sudo make uninstall` removes both. It needs
+the extracted directory to do that, so keep it, or delete those two paths by hand.
+
 ## Documentation
 
 - [`docs/USAGE.md`](docs/USAGE.md) — every flag, all three formats, and how to read each

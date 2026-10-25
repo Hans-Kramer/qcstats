@@ -18,7 +18,7 @@ source and not yet confirmed on hardware.
   enforced one. Last green **2026-10-25** (45 ok, 12s, staged `aarch64` build).
   **[measured]**
 
-- **A second captured fixture.** `make test` runs 240 checks against one real tree, and
+- **A second captured fixture.** `make test` runs 241 checks against one real tree, and
   `tests/t_units.c` builds its own synthetic trees for the shapes nobody can capture. What
   is missing is another real board: one capture proves the code handles that capture.
   Blocked on hardware.
