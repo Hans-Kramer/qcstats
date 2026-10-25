@@ -2,47 +2,30 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer -->
 # TODO
 
-Open items for `qcstats`. Items marked **[measured]** were checked against the board;
-anything else is read from the source and not yet confirmed on hardware.
+Open work on `qcstats`, and nothing else. **No defects are open.** What was fixed, and why,
+is in `CHANGELOG.md`; the JSON contract is in `docs/json-schema-v1.md`.
 
----
-
-## Defects
-
-None open.
+Items marked **[measured]** were checked against the board; anything else is read from the
+source and not yet confirmed on hardware.
 
 ---
 
 ## Gaps
 
-- **The suite proves one board shape.** `make test` runs 226 checks on every push and on
-  `ubuntu-24.04-arm`, covering `io.c`, all three emitters, every sampler against a captured
-  tree, the arithmetic on its own, and the command line through `argv`.
+- **`--gpu-busy`'s tracepoint path when it succeeds.** It needs root and a real adreno
+  tracepoint, so neither CI nor a container can reach it. The unprivileged refusal is
+  asserted, and the branch is chosen by the same `access()` probe the code uses, so it
+  cannot false-fail where tracefs happens to be readable. Closing it means a small
+  hardware-only script, the way `qcctl` has one — which would also cover the teardown after
+  `SIGKILL`, the one signal that leaves the tracepoint enabled and the trace instance
+  behind. The three handled signals and the normal restore are covered. **[measured]**
 
-  The command line is covered as of 2026-10-19: `tests/sh/t_cli.sh` drives the built binary
-  through `argv` — all three output formats and which one wins when two are given, every
-  exit-2 refusal, `--count`'s line arithmetic, `--logfile`, and zone selection including a
-  name nothing matches.
+- **A second captured fixture.** `make test` runs 226 checks against one real tree, and
+  `tests/t_units.c` builds its own synthetic trees for the shapes nobody can capture. What
+  is missing is another real board: one capture proves the code handles that capture.
+  Blocked on hardware.
 
-  What is left: `--gpu-busy`'s tracepoint path when it *succeeds*, which needs root — the
-  unprivileged refusal is asserted, and the branch is chosen by the same `access()` probe the
-  code uses so it cannot false-fail where tracefs is readable. And a **second fixture**, because one
-  captured tree proves the code handles that shape and says nothing about another. Synthetic
-  trees for shapes this board cannot show are the cheaper half of that, because they need no
-  board to write.
-
-- **The binary version and the JSON schema version move independently.** `-V` reports both,
-  and they are not the same number: `0.1.0` is this program, `1` is the stream contract that
-  `qcctl` parses. A release of this project does not imply a schema bump, and a schema bump
-  would not wait for one.
-
-- **Paths nothing verifies:** the `--gpu-busy` tracepoint teardown after `SIGKILL` (the three
-  handled signals are covered, and the normal restore leaves the tracepoint disabled and the
-  trace instance removed **[measured]**), and behaviour on any board that is not a Ventuno Q.
-
----
-
-## Settled
-
-- **No `CONTRIBUTING.md`.** The README's License section states the policy: inbound=outbound,
-  no CLA, you keep your copyright.
+- **Behaviour on anything that is not a Ventuno Q.** Unverified by design — there is no
+  board detection, and guarding is capability-based: a missing path reads as absent and is
+  emitted as `null`. What a different board's *present but differently-shaped* paths would
+  produce is untested.

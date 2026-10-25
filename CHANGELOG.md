@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unsigned there and signed on x86. The suite also passes when cross-built and run on the
   board itself.
 
-  **The command line is in it too, as `tests/sh/t_cli.sh` — 54 checks.** The C tests link
+  **The command line is in it too, as `tests/sh/t_cli.sh` — 59 checks.** The C tests link
   every object except `main.o`, so the argv layer sat structurally outside them: of 12
   options, 3 were ever run, and `--csv` and `--plain` had no test at all. A `--csv` that
   emitted nothing would have passed the whole suite. It now asserts all three output formats
