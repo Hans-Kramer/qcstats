@@ -17,6 +17,10 @@
 > code does with that shape, never that the shape is still what a kernel
 > presents. **Every figure in these docs was measured on hardware by hand.**
 >
+> **A further 45 checks need the board itself — `tests/board-check.sh`, run by
+> hand as root; the gate does not run them and cannot.** They are the `--gpu-busy`
+> path where it succeeds, which no captured tree can contain.
+>
 > `qcstats` reads; it writes nothing to the system except the opt-in
 > `--gpu-busy` tracepoint, which it removes on exit.
 >
@@ -81,7 +85,9 @@ field respectively, and **never a zero**: `0 rpm` means the fan is off, `0%` mea
 core, and a sensor that could not be read must not be able to claim either.
 
 It runs unprivileged and writes nothing — with one opt-in exception, `--gpu-busy`, which
-needs root and enables a tracepoint.
+needs root and enables a tracepoint. It does that in a private trace instance, so it
+disturbs no tracing already in use, and removes it on exit; `SIGKILL` is the one signal
+that leaves it behind, and then one `rmdir` is the whole cleanup.
 
 **Full reference — every flag, all three output formats, what each field means and how to
 read it correctly: [`docs/USAGE.md`](docs/USAGE.md).**

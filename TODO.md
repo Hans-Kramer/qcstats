@@ -12,13 +12,11 @@ source and not yet confirmed on hardware.
 
 ## Gaps
 
-- **`--gpu-busy`'s tracepoint path when it succeeds.** It needs root and a real adreno
-  tracepoint, so neither CI nor a container can reach it. The unprivileged refusal is
-  asserted, and the branch is chosen by the same `access()` probe the code uses, so it
-  cannot false-fail where tracefs happens to be readable. Closing it means a small
-  hardware-only script, the way `qcctl` has one — which would also cover the teardown after
-  `SIGKILL`, the one signal that leaves the tracepoint enabled and the trace instance
-  behind. The three handled signals and the normal restore are covered. **[measured]**
+- **The gate does not run the hardware checks, and cannot.** `tests/board-check.sh` is 45
+  checks that need tracefs, a devfreq governor that is polling, and a GPU that can be
+  powered. Nothing reminds anyone to run it — it is a release step written down, not an
+  enforced one. Last green **2026-10-25** (45 ok, 12s, staged `aarch64` build).
+  **[measured]**
 
 - **A second captured fixture.** `make test` runs 226 checks against one real tree, and
   `tests/t_units.c` builds its own synthetic trees for the shapes nobody can capture. What

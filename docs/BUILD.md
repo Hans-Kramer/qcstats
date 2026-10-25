@@ -69,6 +69,29 @@ That is it working. Press **Ctrl+C** at any time to stop it.
 
 ---
 
+## Tests (optional)
+
+```
+make test
+```
+
+226 checks: the readers, the three output formats, every sampler against a captured board's
+sysfs, the arithmetic, and the command line. They need no board and no root — a fixture in
+`tests/fixtures/` stands in for the hardware, and `QCSTATS_SYSROOT` is what points the
+program at it.
+
+```
+sudo sh tests/board-check.sh
+```
+
+45 more that only a board can answer, and **only on a Ventuno Q**: `--gpu-busy` enables a
+tracepoint in tracefs, which is root-only, and the metric exists only while the GPU is
+powered. Nothing a captured tree holds can stand in for that, which is why these are
+separate and run by hand. It prints a verdict per check and puts the board back on the way
+out. `sh tests/board-check.sh --list` shows the sections.
+
+---
+
 ## Step 5 — Install it properly (recommended)
 
 To be able to run `qcstats` from anywhere:

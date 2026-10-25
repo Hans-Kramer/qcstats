@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`tests/board-check.sh`, the hardware checks the gate cannot run.** 45 checks in four
+  sections, run by hand on a board as root, closing the last gap in `TODO.md`: the
+  `--gpu-busy` path where it *succeeds*. No fixture can stand in for it — the one write
+  this program makes goes to an absolute tracefs path that no sysroot relocates, the event
+  it enables is produced by a devfreq governor that is actually polling, and the metric
+  only exists while a GPU is powered. The suite therefore asserted the refusal and nothing
+  else.
+
+  The obstacle was that the GPU is runtime-suspended about 97% of uptime, and devfreq
+  polling suspends with it, so at rest the tracepoint is silent and the success path is
+  unreachable. Finding GPU work to run would have measured the workload rather than this
+  program; instead the script holds the GPU resumed through runtime PM
+  (`power/control=on`), after which the governor polls at its own 50 ms interval and the
+  event fires whatever the GPU is or is not doing. Measured: 20 events per second, and the
+  reported percentage is checked for *membership in the set of values the kernel printed in
+  the same window* — being in range would not catch a parser reading the wrong field.
+
+  What this proves that nothing could before: a value under `runtime_status=active` was
+  parsed from a trace line, because the suspended-GPU fallback cannot fire there and an
+  unparsed sample is `null`; a `0` under `runtime_status=suspended` with a silent witness
+  instance came from `runtime_status` and is a measurement, not a guess; a second trace
+  instance of someone else's keeps recording after `qcstats` exits, which is the point of
+  not touching the global buffer; and the global buffer is as it was afterwards. The
+  teardown is checked per signal — `SIGINT`, `SIGTERM` and `SIGHUP` each end the run and
+  remove the instance, and `SIGKILL`, the one signal no handler sees, is asserted to
+  *leave* the instance and the enabled event behind, since that is the state an operator
+  will actually find and a private instance is what bounds it to one `rmdir`.
+
+  Every check was proven failable against mutated source, not edited expectations: a
+  fallback comparison that can never match turns the idle samples `null`; a wrong parse
+  needle turns the active ones `null`; dropping the `rmdir` in the close path reddens all
+  three signals and the normal exit; and enabling the *global* event instead of the
+  instance's reddens the isolation check. The four environment assertions — the devfreq
+  device's name, `busy_time`, `total_time`, and the `load=` print format the parser reads —
+  were proven live by pointing them at paths that do not exist.
+
+  One of those mutations found a defect in the script rather than the program: the
+  membership check reported a clean pass while every value was `null`, because an unusable
+  value was counted elsewhere and the loop then compared nothing. A test that passes over
+  an empty loop is the one failure mode a test must not have, so both value loops now count
+  what they actually compared and fail when that is zero.
+
+---
+
 ## [0.1.0] - 2026-10-21
 
 ### Added
