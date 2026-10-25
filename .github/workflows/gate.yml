@@ -51,15 +51,15 @@ jobs:
         run: |
           out=$(make test 2>&1) || { printf '%s\n' "$out"; exit 1; }
           printf '%s\n' "$out"
-          # A test that skips is a test that is not running, so a skip here has to be one we
-          # can name. Exactly one can be: tests/sh/t_install.sh stages a NATIVE build, which
-          # needs the sibling qcstats, and this job checks out qcctl alone - the `contract`
-          # job has both repos and runs it for real, which is why a skip is fatal there.
-          # Anything else skipping is a fault.
-          unexpected=$(printf '%s\n' "$out" | grep SKIPPED | grep -cv 't_install') || true
-          if [ "${unexpected:-0}" != 0 ]; then
-            printf '%s\n' "$out" | grep SKIPPED | grep -v 't_install'
-            echo "::error::a test skipped in CI for a reason this job does not expect"
+          # A test that skips is a test that is not running. Nothing in this suite has a
+          # reason to skip on a runner: every test reads a fixture or the binary, both of
+          # which are in the tree, so ANY skip is a fault. (This exemption used to name
+          # t_install and explain it in terms of a sibling checkout and a `contract` job -
+          # neither of which exists in this repo. It was carried over from qcctl, and it
+          # exempted a test that did not exist here until one did.)
+          if printf '%s\n' "$out" | grep -q SKIPPED; then
+            printf '%s\n' "$out" | grep SKIPPED
+            echo "::error::a test skipped in CI, where every test can run"
             exit 1
           fi
 
@@ -117,15 +117,15 @@ jobs:
         run: |
           out=$(make test 2>&1) || { printf '%s\n' "$out"; exit 1; }
           printf '%s\n' "$out"
-          # A test that skips is a test that is not running, so a skip here has to be one we
-          # can name. Exactly one can be: tests/sh/t_install.sh stages a NATIVE build, which
-          # needs the sibling qcstats, and this job checks out qcctl alone - the `contract`
-          # job has both repos and runs it for real, which is why a skip is fatal there.
-          # Anything else skipping is a fault.
-          unexpected=$(printf '%s\n' "$out" | grep SKIPPED | grep -cv 't_install') || true
-          if [ "${unexpected:-0}" != 0 ]; then
-            printf '%s\n' "$out" | grep SKIPPED | grep -v 't_install'
-            echo "::error::a test skipped in CI for a reason this job does not expect"
+          # A test that skips is a test that is not running. Nothing in this suite has a
+          # reason to skip on a runner: every test reads a fixture or the binary, both of
+          # which are in the tree, so ANY skip is a fault. (This exemption used to name
+          # t_install and explain it in terms of a sibling checkout and a `contract` job -
+          # neither of which exists in this repo. It was carried over from qcctl, and it
+          # exempted a test that did not exist here until one did.)
+          if printf '%s\n' "$out" | grep -q SKIPPED; then
+            printf '%s\n' "$out" | grep SKIPPED
+            echo "::error::a test skipped in CI, where every test can run"
             exit 1
           fi
 

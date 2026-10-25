@@ -28,6 +28,7 @@ CFLAGS  += -DQCSTATS_VERSION=\"$(VERSION)\"
 DESTDIR ?=
 prefix  ?= /usr/local
 bindir  ?= $(prefix)/bin
+mandir  ?= $(prefix)/share/man
 
 TARGET := qcstats
 SRCDIR := src
@@ -132,9 +133,14 @@ clean:
 
 # qcstats is a sampler and never writes to the system, so it needs no
 # privileges and no setuid bit.
+# The man page is installed uncompressed: man(1) reads either, and compressing it here
+# would differ from what the tests check and from what a packager does for themselves.
 install: $(TARGET)
 	install -d $(DESTDIR)$(bindir)
 	install -m 0755 $(TARGET) $(DESTDIR)$(bindir)/$(TARGET)
+	install -d $(DESTDIR)$(mandir)/man1
+	install -m 0644 docs/$(TARGET).1 $(DESTDIR)$(mandir)/man1/$(TARGET).1
 
 uninstall:
 	rm -f $(DESTDIR)$(bindir)/$(TARGET)
+	rm -f $(DESTDIR)$(mandir)/man1/$(TARGET).1

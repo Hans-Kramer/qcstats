@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.0] - 2026-10-25
 
 ### Added
 
@@ -55,11 +55,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an empty loop is the one failure mode a test must not have, so both value loops now count
   what they actually compared and fail when that is zero.
 
----
+- **A man page, `docs/qcstats.1`, installed by `make install`.** A program in
+  `/usr/local/bin` with no `man qcstats` is a program whose options can only be learned by
+  running it. It carries the flags, the exit-status contract, `QCSTATS_SYSROOT`, and the
+  absence rule; `docs/USAGE.md` stays the long form and the man page does not try to
+  replace it. The `.TH` line names no version, so there is no second place to remember to
+  bump - `qcstats -V` is the authority.
 
-## [0.1.0] - 2026-10-21
+- **`make install` is now two files, so the suite checks it.** `tests/sh/t_install.sh`
+  stages an install under `DESTDIR`, and asserts both files land with the modes they
+  should have, that each is byte-identical to what was built, that installing twice
+  succeeds the way an upgrade does, and that after `make uninstall` **no file at all** is
+  left in the staged tree - counted rather than named, so the next thing `install` grows
+  is caught without anyone remembering to add a check. Proven failable by dropping the man
+  page from `install`, dropping it from `uninstall`, and installing it 0600.
 
-### Added
+- **A bug-report issue form** (`.github/ISSUE_TEMPLATE/bug_report.yml`) that asks for
+  `qcstats -V`, `uname -r` and `BUILD_ID` - the three strings that identify a binary and a
+  board - and states up front that an absent field on other hardware is the intended
+  behaviour.
 
 - **The arithmetic, and the two output formats nothing had ever executed.** The suite was
   thorough about whether a field was PRESENT and almost silent about whether it was RIGHT:
@@ -165,6 +179,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for exactly that reason. The hold is bounded by the rate limit alone.
 
 ### Fixed
+
+- **The gate exempted a test that could not exist here from its own no-skip rule.** Both
+  jobs excluded `t_install` from the assertion that nothing may skip in CI, and the comment
+  explaining why described `qcctl`'s layout - a sibling checkout and a `contract` job,
+  neither of which this repo has. It was carried over wholesale, and it exempted a test
+  that did not exist in this tree until this release added one. Any `SKIPPED` line now
+  fails both jobs, which is what the rule was for: nothing in this suite reads anything
+  that is not in the tree.
 
 - **The gate's first run failed, in the gate rather than the code.** Three faults, all mine,
   all found by running it:

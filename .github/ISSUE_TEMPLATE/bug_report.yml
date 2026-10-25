@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer
+name: Bug report
+description: A reading that is wrong, missing, or a run that fails
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `qcstats` targets one board — the Arduino Ventuno Q (QCS8275). On anything else
+        the paths it reads are absent, and a field reported as `n/a`, `null` or empty is
+        the intended behaviour rather than a bug.
+
+        A field is **absent**, never zero, when it could not be read: `0 rpm` means the
+        fan is off and `0%` means an idle core. If a value is zero and you expected
+        absent (or the other way round), that is worth reporting.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: cmd
+    attributes:
+      label: The command you ran
+      placeholder: qcstats --json --count 5
+    validations:
+      required: true
+  - type: textarea
+    id: ids
+    attributes:
+      label: Versions
+      description: |
+        The output of these three, which is what identifies the binary and the board:
+        ```
+        qcstats -V
+        uname -r
+        grep BUILD_ID /etc/buildinfo
+        ```
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: |
+        The sample lines involved, and any notice on standard error. One `--json` sample
+        plus its `meta` line is the most useful form.
+      render: shell
+    validations:
+      required: false

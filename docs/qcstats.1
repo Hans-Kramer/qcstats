@@ -1,0 +1,170 @@
+.\" SPDX-License-Identifier: CC-BY-4.0
+.\" SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer
+.TH QCSTATS 1 "2026-10-25" "qcstats" "User Commands"
+.SH NAME
+qcstats \- telemetry sampler for the Arduino Ventuno Q
+.SH SYNOPSIS
+.B qcstats
+.RI [ options ]
+.RI [ interval_ms ]
+.SH DESCRIPTION
+.B qcstats
+samples the hardware telemetry of an Arduino Ventuno Q (Qualcomm QCS8275 /
+Dragonwing IQ\-8275) and prints one sample per line: per\-core CPU utilisation and
+per\-cluster frequency for all three frequency policies, memory in use, GPU
+frequency, thermal zone temperatures, board input power, fan duty and rpm, and the
+kernel's LMh throttle counters.
+.PP
+It reads only paths that exist on that board, and it writes nothing to the system \-
+with one opt\-in exception, see
+.B \-\-gpu\-busy
+below. It needs no privileges: CPU frequency comes from
+.IR scaling_cur_freq ,
+not from the root\-only
+.IR cpuinfo_cur_freq .
+.PP
+Nothing is printed for the first interval. CPU percentages are a delta and need two
+.I /proc/stat
+readings, so there is nothing truthful to print before one interval has passed.
+.PP
+A source that cannot be read is reported as
+.BR absent ,
+never as a zero:
+.B n/a
+in the plain format,
+.B null
+in JSON, and an empty field in CSV. A zero means a measurement was taken and it was
+zero \-
+.I 0 rpm
+is a fan that is off, and
+.I 0%
+is an idle core.
+.SH OPTIONS
+.TP
+.B \-\-plain
+One compact line per sample, for reading. The default.
+.TP
+.B \-\-json
+One JSON object per sample, newline\-delimited (NDJSON), preceded by one
+.I meta
+line naming the kernel and image the run saw. The field\-by\-field contract is
+versioned; see
+.BR "JSON SCHEMA" .
+.TP
+.B \-\-csv
+CSV with a header row. An empty field is an absent source.
+.TP
+.BI \-\-count " N"
+Emit
+.I N
+samples and exit. The default, 0, runs until killed. Note that
+.B \-\-count 1
+still costs one interval, for the reason given above.
+.TP
+.BI \-\-interval " MS"
+Sampling interval in milliseconds. Default 1000, floor 50; a smaller value is
+clamped to the floor. The positional
+.I interval_ms
+argument does the same thing.
+.TP
+.BI \-\-zones " LIST"
+Comma\-separated thermal zones, by the short printed name
+.RI ( cpuss-0-0 )
+or the full type
+.RI ( cpuss-0-0-thermal ).
+Default: five zones.
+.TP
+.B \-\-all\-zones
+Every thermal zone the kernel exposes, in index order \- 48 on this board. Mutually
+exclusive with
+.BR \-\-zones .
+.TP
+.B \-\-npu
+Report Hexagon NSP utilisation and clock over FastRPC. Needs
+.I libcdsprpc.so.1
+and access to the FastRPC device; the library is resolved at run time and reported as
+absent when it is missing. Polled at 1 Hz regardless of
+.BR \-\-interval ,
+because one query costs about 1.12 ms and loads the DSP itself.
+.TP
+.B \-\-gpu\-busy
+Report the true GPU busy percentage.
+.B Needs root, and is the one thing qcstats writes:
+it enables the
+.I devfreq_monitor
+tracepoint, in a trace instance of its own so that any tracing already in use is
+undisturbed, and removes it again on exit.
+.B SIGINT,
+.B SIGTERM
+and
+.B SIGHUP
+are handled so that an interrupted run still restores it;
+.B SIGKILL
+is the one signal that leaves the instance and the enabled event behind, and removing
+the instance directory undoes it.
+.IP
+An idle GPU is runtime\-suspended and its devfreq governor stops polling, so the
+tracepoint is silent and 0 is then reported from the GPU's
+.IR runtime_status :
+a powered\-down GPU is executing nothing. A GPU that is awake but has not yet
+completed a polling window is reported as absent rather than as a stale value.
+.TP
+.BI \-\-logfile " P"
+Write samples to
+.I P
+instead of standard output; notices still go to standard error.
+.B This truncates P,
+so that a CSV header cannot land in the middle of a file.
+.TP
+.BR \-h ", " \-\-help
+Print usage to standard output and exit.
+.TP
+.BR \-V ", " \-\-version
+Print the sampler version and the JSON schema version, one per line, and exit.
+.SH EXIT STATUS
+.TP
+.B 0
+Success, including a run in which sources were absent.
+.TP
+.B 2
+Usage error, or a
+.B \-\-logfile
+that could not be opened.
+.PP
+Nothing in the sampling loop changes the exit status: a board with no fan and no power
+sensor still exits 0. Absence is a reading, not a failure.
+.SH ENVIRONMENT
+.TP
+.B QCSTATS_SYSROOT
+Read sysfs and procfs under this directory instead of
+.IR / ,
+so the sampler can be exercised against a captured tree off\-hardware. It relocates
+reads only; the
+.B \-\-gpu\-busy
+tracepoint path is absolute and is not relocated.
+.SH JSON SCHEMA
+.B \-\-json
+output carries a schema version
+.RI ( "\"v\":1" )
+that is independent of the program version: a field is never renamed or retyped
+without it changing. The per\-field contract is in
+.I docs/json\-schema\-v1.md
+in the source distribution.
+.SH EXAMPLES
+.TP
+.B qcstats
+One line per second until interrupted.
+.TP
+.B qcstats --json --count 5
+Five NDJSON samples, then exit.
+.TP
+.B qcstats --csv --interval 500 --logfile run.csv
+Two samples a second to a CSV file.
+.TP
+.B qcstats --all-zones --count 1
+Every thermal zone, once.
+.SH BUGS
+It targets one board. On other hardware the paths it reads are simply absent, and are
+reported as absent; what differently\-shaped paths would produce is untested.
+.SH AUTHOR
+Hans Kramer.
