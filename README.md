@@ -2,35 +2,6 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer -->
 # qcstats
 
-> [!CAUTION]
-> **`v0.1.0` — the first release.** It targets one board and nothing else.
->
-> `qcstats` and its companion [`qcctl`](https://github.com/Hans-Kramer/qcctl)
-> target **one board** — the Arduino Ventuno Q (QCS8275). Nothing else is
-> tested, and the sampler reads paths that only exist there.
->
-> The gate in this tree compiles under `gcc`, `clang` and the `aarch64` cross
-> build at `-Wall -Wextra -Werror`, and runs **226 behavioural checks** — `io.c`,
-> the emitters in all three output formats, every sampler against a captured
-> board, the arithmetic on its own, and the command line itself — on x86-64 and
-> on `aarch64`. A fixture is a photograph of one board's sysfs: it proves what the
-> code does with that shape, never that the shape is still what a kernel
-> presents. **Every figure in these docs was measured on hardware by hand.**
->
-> **A further 45 checks need the board itself — `tests/board-check.sh`, run by
-> hand as root; the gate does not run them and cannot.** They are the `--gpu-busy`
-> path where it succeeds, which no captured tree can contain.
->
-> `qcstats` reads; it writes nothing to the system except the opt-in
-> `--gpu-busy` tracepoint, which it removes on exit.
->
-> **What `0.1.0` promises, and what it does not.** The JSON schema is the one
-> contract meant to be stable, and it is version `1`: a field is never renamed
-> or retyped without that number changing, and `qcctl` refuses a line of any
-> other version rather than guessing. Everything else is `0.x` in the ordinary
-> sense — the command line and the human and CSV formats may change in a minor
-> release. Known gaps are in [`TODO.md`](TODO.md).
-
 A telemetry sampler for the **Arduino Ventuno Q**
 a.k.a. `monza` (Qualcomm QCS8275 / Dragonwing IQ-8275).
 
@@ -43,76 +14,60 @@ a.k.a. `monza` (Qualcomm QCS8275 / Dragonwing IQ-8275).
 > "Dragonwing" are trademarks of Qualcomm Incorporated.
 > All trademarks are the property of their respective owners. 
 
+One sample per line, for reading live or logging to a file (one line, wrapped here):
+
+```
+RAM 1344/15284MB CPU [A78C.0:1%,0%@1017MHz A78C.1:0%,0%@940MHz A55:4%,0%,0%,1%@844MHz]
+GPU 479MHz cpuss-0-0@35.7C cpuss-1-0@35.4C gpuss-0@35.7C nsp-0-0-0@35.1C ddrss-0@35.1C
+VDD_IN 10800mW (20.1V 539mA) FAN 40%@2658rpm LMh [A78C.0:0 A78C.1:0 A55:0]
+```
+
+## What it reports
+
+- **CPU** — per-core utilisation and per-cluster frequency, across all three frequency
+  policies (four Cortex-A78C cores in two policies, four A55)
+- **Memory** — used and total
+- **GPU** — Adreno frequency, and with `--gpu-busy` the true busy percentage
+- **NPU** — Hexagon NSP utilisation and clock, with `--npu`
+- **Temperatures** — five zones by default, or any of the 48 the board exposes
+- **Power** — board input power, voltage and current from the INA232
+- **Fan** — duty cycle and measured rpm
+- **Throttling** — LMh throttle events per cluster (counts since boot, not severity)
+
+Three output formats: `--plain` (default), `--json` (NDJSON, one object per sample) and
+`--csv`. A source that cannot be read is reported as **absent** — `n/a`, `null`, or an empty
+field — and **never as a zero**, because `0 rpm` means the fan is off and `0%` means an idle
+core.
+
+It links nothing but libc — `--npu` resolves the vendor FastRPC library at runtime, and
+reports absent when it is not there. It runs unprivileged and writes nothing to the system,
+with one opt-in exception: `--gpu-busy` needs root and enables a kernel tracepoint, in a
+private trace instance it removes again on exit.
+
+## Scope
+
+**This targets one board.** Every path it reads was verified on a Ventuno Q, and nothing else
+is tested. On other hardware the paths are simply absent, and absent is reported as absent.
+
 ## Install
 
-No release has been published yet, so build it. There is nothing to install beyond a C
-compiler — `qcstats` has no dependencies.
-
-- **New to Linux?** → **[`docs/BUILD.md`](docs/BUILD.md)**.
-- **Comfortable with a terminal?** → the [Build](#build) section below.
-
-`sudo make install` puts the binary in `/usr/local/bin`, which is on the default `PATH` on
-the board, so `qcstats` works from any directory afterwards. Check it with:
+Build it — there is nothing to install beyond a C compiler, and no dependencies:
 
 ```sh
+make
+sudo make install          # /usr/local/bin, on the board's default PATH
 qcstats --count 1
 ```
 
----
+## Documentation
 
-## Build
-
-No dependencies — libc only.
-
-```sh
-make            # builds ./qcstats
-```
-
-## Usage
-
-```sh
-qcstats                       # one plain line per second, until killed
-qcstats --json --count 5      # five NDJSON samples, then exit
-qcstats --all-zones           # every thermal zone (48 on this board)
-```
-
-Nothing is printed for the first interval: CPU percentages are a delta and need two
-`/proc/stat` readings, so there is nothing truthful to print before then.
-
-Three output modes — `--plain` (default, for reading), `--json` (NDJSON, one object per
-line), `--csv` (header row, empty field = absent). Absent is `n/a`, `null` and an empty
-field respectively, and **never a zero**: `0 rpm` means the fan is off, `0%` means an idle
-core, and a sensor that could not be read must not be able to claim either.
-
-It runs unprivileged and writes nothing — with one opt-in exception, `--gpu-busy`, which
-needs root and enables a tracepoint. It does that in a private trace instance, so it
-disturbs no tracing already in use, and removes it on exit; `SIGKILL` is the one signal
-that leaves it behind, and then one `rmdir` is the whole cleanup.
-
-**Full reference — every flag, all three output formats, what each field means and how to
-read it correctly: [`docs/USAGE.md`](docs/USAGE.md).**
-The versioned field-by-field contract: [`docs/json-schema-v1.md`](docs/json-schema-v1.md).
+- [`docs/USAGE.md`](docs/USAGE.md) — every flag, all three formats, and how to read each
+  field correctly
+- [`docs/BUILD.md`](docs/BUILD.md) — building, testing and installing, step by step
+- [`docs/json-schema-v1.md`](docs/json-schema-v1.md) — the versioned JSON contract
+- [`CHANGELOG.md`](CHANGELOG.md) and [`TODO.md`](TODO.md) — what changed, and what is open
 
 ## License
 
-Three licences, chosen by what the file *is*:
-
-| | |
-|---|---|
-| `src/` — the sampler itself | **MPL-2.0** |
-| `Makefile` — build glue | **MIT** |
-| `README.md`, `docs/*.md` — prose | **CC-BY-4.0** |
-
-Every file carries an `SPDX-License-Identifier`. Full texts are in [`LICENSE`](LICENSE)
-(MPL-2.0) and [`LICENSES/`](LICENSES/). **Code blocks inside the documentation are MIT**,
-not CC-BY-4.0 — paste a snippet into your own project and you owe no attribution.
-
-MPL-2.0 is *file-level* copyleft: patch one of these source files and publish that file.
-It stops there. Linking `qcstats` into proprietary software creates no obligation to open
-that software — static linking included — and new files you write alongside it stay yours.
-
-**No CLA.** Contributions are inbound=outbound: your patch is licensed under whatever the
-file you touched already carries, and you keep your copyright.
-
-No third-party source is in this tree, so there is nothing to attribute. `libcdsprpc.so.1`
-is resolved with `dlopen` at runtime under `--npu` and is neither bundled nor linked.
+`MPL-2.0` for the source, `CC-BY-4.0` for the documentation, `MIT` for the build and CI
+glue. See [`LICENSE`](LICENSE) and [`LICENSES/`](LICENSES/).
