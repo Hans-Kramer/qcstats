@@ -61,7 +61,7 @@ qcstats --count 1
 
 ### Install from GitHub
 
-A release builds on the board itself, once there is a toolchain — the board image has
+The source builds on the board itself, once there is a toolchain — the board image has
 none:
 
 ```sh
@@ -73,8 +73,8 @@ make
 sudo make install
 ```
 
-Substitute the tag of whichever release you want; the same tarball is the *Source code
-(tar.gz)* link on the release page.
+Substitute whichever tag you want, or clone the repository instead — this project ships no
+binaries, only source.
 
 `make install` places exactly two files — `/usr/local/bin/qcstats` and
 `/usr/local/share/man/man1/qcstats.1` — and `sudo make uninstall` removes both. It needs
