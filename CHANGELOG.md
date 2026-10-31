@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A `net` section: every interface, not just CAN.** Seven on this board — Wi-Fi,
+  Ethernet, three CAN buses, the Docker bridge and loopback — with link state, MTU,
+  carrier, speed and the eight `statistics/` counters, each carrying its own presence
+  flag. CAN is one interface *kind* among them rather than a section of its own; it is a
+  transport that happens to hang off the MCU, and treating it as the whole of networking
+  was the wrong shape.
+
+  Three things a consumer should know, all in `docs/json-schema-v1.md`. The interface
+  list is **resolved once at startup**, like the thermal zones, because the CSV header
+  has to describe every row after it — so an interface plugged in later is missed for the
+  rest of the run. Counters are **raw, not rates**: two samples and the `t` on each are
+  enough to divide, and a rate computed here would be over this sampler's interval rather
+  than the consumer's. And `kind` is **not** read from the ARPHRD `type` alone — that
+  identifies CAN and loopback outright, but a managed-mode Wi-Fi station reports
+  ARPHRD_ETHER exactly as a wired port does, so without the `wireless/` check every Wi-Fi
+  adapter reports as Ethernet.
+
+  `v` stays `1`: a new field is not a breaking change by this schema's own rule, and
+  `qcctl`'s reader was checked before the shape was chosen — its parsers are bounded, so
+  a new top-level key cannot be walked into. `--csv` gains twelve columns per interface,
+  which moves `kernel` and `build_id` right; that affects a reader indexing CSV by
+  position rather than by header name, and is noted in the schema doc. **[measured]**
+
 ### Fixed
 
 - **`make test` failed on the only hardware this targets.** `tests/sh/t_cli.sh` asserted
