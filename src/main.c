@@ -62,6 +62,7 @@ static const struct sampler *const SAMPLERS[] = {
     &sampler_power,
     &sampler_fan,
     &sampler_throttle,
+    &sampler_net,
     &sampler_npu,
     &sampler_gpu_busy,      /* opt-in; writes to tracefs, see src/gputrace.c */
 };
