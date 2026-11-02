@@ -273,6 +273,149 @@ static void t_an_overlong_path_is_refused_not_truncated(void)
     src_close(&s);
 }
 
+/* Write one file inside a fixture tree rooted at dir. */
+static void mkfile(const char *relative, const char *content)
+{
+    char path[320], cmd[400], *slash;
+    FILE *f;
+
+    snprintf(path, sizeof path, "%s/%s", dir, relative);
+    slash = strrchr(path, '/');
+    if (slash) {
+        *slash = '\0';
+        snprintf(cmd, sizeof cmd, "mkdir -p '%s'", path);
+        if (system(cmd) != 0) {
+            fprintf(stderr, "cannot create %s\n", path);
+            exit(2);
+        }
+        *slash = '/';
+    }
+    if ((f = fopen(path, "w")) == NULL) {
+        perror(path);
+        exit(2);
+    }
+    fputs(content, f);
+    fclose(f);
+}
+
+static void rmtree(const char *relative)
+{
+    char cmd[400];
+
+    snprintf(cmd, sizeof cmd, "rm -rf '%s/%s'", dir, relative);
+    if (system(cmd) != 0)
+        fprintf(stderr, "warning: could not clear %s\n", relative);
+}
+
+/*
+ * The sensor that provoked this: ath11k_hwmon has no thermal zone on the
+ * board and is the hottest reading on it, so a table built from
+ * /sys/class/thermal alone cannot name it at all.
+ */
+static void t_zone_table_includes_hwmon_with_no_zone(void)
+{
+    struct zone_tab tab[16];
+    size_t n;
+    int at;
+
+    rmtree("sys");
+    mkfile("sys/class/thermal/thermal_zone0/type", "cpu-0-0-thermal\n");
+    mkfile("sys/class/thermal/thermal_zone0/temp", "38000\n");
+    mkfile("sys/class/hwmon/hwmon45/name", "ath11k_hwmon\n");
+    mkfile("sys/class/hwmon/hwmon45/temp1_input", "46000\n");
+
+    io_set_sysroot(dir);
+    n = zone_table(tab, 16);
+    T_EQ_INT((long long)n, 2, "a zone and an orphan hwmon sensor");
+
+    at = zone_lookup(tab, n, "ath11k_hwmon");
+    T_TRUE(at >= 0, "the hwmon sensor resolves by name");
+    if (at >= 0) {
+        T_EQ_STR(tab[at].attr, "temp1_input",
+                 "and names the hwmon attribute, not a zone's");
+        T_HAS(tab[at].dir, "hwmon45", "pointing at the hwmon directory");
+    }
+
+    /* The zone still resolves, by the bare form as well as the full type. */
+    at = zone_lookup(tab, n, "cpu-0-0");
+    T_TRUE(at >= 0, "the bare zone name still resolves");
+    if (at >= 0)
+        T_EQ_STR(tab[at].attr, "temp", "a zone reads its own temp attribute");
+
+    io_set_sysroot("");
+}
+
+/*
+ * Nearly every sensor appears in both trees, spelled with dashes in one and
+ * underscores in the other. Without folding the two before comparing, the
+ * hwmon pass would add a second copy of every sensor on the board.
+ */
+static void t_a_hwmon_duplicate_of_a_zone_is_not_added(void)
+{
+    struct zone_tab tab[16];
+    size_t n;
+
+    rmtree("sys");
+    mkfile("sys/class/thermal/thermal_zone0/type", "cpuss-0-0-thermal\n");
+    mkfile("sys/class/thermal/thermal_zone0/temp", "38000\n");
+    mkfile("sys/class/thermal/thermal_zone1/type", "GPUSS-0-thermal\n");
+    mkfile("sys/class/thermal/thermal_zone1/temp", "37000\n");
+    /* The same two, hwmon's spelling and case. */
+    mkfile("sys/class/hwmon/hwmon34/name", "cpuss_0_0_thermal\n");
+    mkfile("sys/class/hwmon/hwmon34/temp1_input", "38000\n");
+    mkfile("sys/class/hwmon/hwmon30/name", "gpuss_0_thermal\n");
+    mkfile("sys/class/hwmon/hwmon30/temp1_input", "37000\n");
+
+    io_set_sysroot(dir);
+    n = zone_table(tab, 16);
+    T_EQ_INT((long long)n, 2, "the duplicates are folded away");
+    T_EQ_STR(tab[0].attr, "temp", "the zone is the one kept");
+    T_EQ_STR(tab[1].attr, "temp", "for both of them");
+
+    io_set_sysroot("");
+}
+
+/* A device with no zone may carry several channels. Taking temp1 alone would
+ * drop the rest silently; only past the first is the label suffixed. */
+static void t_every_channel_of_an_orphan_is_tabled(void)
+{
+    struct zone_tab tab[16];
+    size_t n;
+
+    rmtree("sys");
+    mkfile("sys/class/hwmon/hwmon0/name", "coretemp\n");
+    mkfile("sys/class/hwmon/hwmon0/temp1_input", "59000\n");
+    mkfile("sys/class/hwmon/hwmon0/temp3_input", "49000\n");
+
+    io_set_sysroot(dir);
+    n = zone_table(tab, 16);
+    T_EQ_INT((long long)n, 2, "both channels");
+    T_EQ_STR(tab[0].type, "coretemp", "the first keeps the bare device name");
+    T_EQ_STR(tab[1].type, "coretemp_temp3",
+             "and a gap in the numbering is skipped, not treated as the end");
+
+    io_set_sysroot("");
+}
+
+/* The fan controller and the power monitor live in this tree too, and have
+ * no temperature to contribute. */
+static void t_a_hwmon_device_without_a_temperature_is_skipped(void)
+{
+    struct zone_tab tab[16];
+
+    rmtree("sys");
+    mkfile("sys/class/hwmon/hwmon0/name", "emc2305\n");
+    mkfile("sys/class/hwmon/hwmon0/fan1_input", "2686\n");
+    mkfile("sys/class/hwmon/hwmon1/name", "ina232\n");
+    mkfile("sys/class/hwmon/hwmon1/power1_input", "11200000\n");
+
+    io_set_sysroot(dir);
+    T_EQ_INT((long long)zone_table(tab, 16), 0, "neither has a temperature");
+    io_set_sysroot("");
+
+    rmtree("sys");
+}
+
 int main(void)
 {
     char cmd[128];
@@ -291,6 +434,10 @@ int main(void)
     t_str_truncates_and_str_all_refuses();
     t_sysroot_relocates();
     t_an_overlong_path_is_refused_not_truncated();
+    t_zone_table_includes_hwmon_with_no_zone();
+    t_a_hwmon_duplicate_of_a_zone_is_not_added();
+    t_every_channel_of_an_orphan_is_tabled();
+    t_a_hwmon_device_without_a_temperature_is_skipped();
 
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", dir);
     if (system(cmd) != 0)

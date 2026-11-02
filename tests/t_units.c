@@ -223,6 +223,97 @@ static void t_throttle_sums_every_cpu_column(void)
     T_EQ_U64(s.thr[2], 36000, "and policy 2's");
 }
 
+/* ---- net: classification, ordering, and absent-vs-zero -------------------------- */
+
+static void net_iface(const char *name, const char *type, const char *oper,
+                      const char *rx, const char *tx)
+{
+    char rel[160];
+
+    snprintf(rel, sizeof rel, "sys/class/net/%s/type", name);        put(rel, type);
+    snprintf(rel, sizeof rel, "sys/class/net/%s/operstate", name);   put(rel, oper);
+    snprintf(rel, sizeof rel, "sys/class/net/%s/mtu", name);         put(rel, "1500\n");
+    snprintf(rel, sizeof rel, "sys/class/net/%s/statistics/rx_bytes", name);
+    put(rel, rx);
+    snprintf(rel, sizeof rel, "sys/class/net/%s/statistics/tx_bytes", name);
+    put(rel, tx);
+}
+
+/* The ARPHRD type identifies CAN and loopback, but a managed-mode Wi-Fi
+ * station reports ARPHRD_ETHER (1) exactly as a wired port does - so the
+ * wireless directory is the only thing that tells those two apart, and
+ * getting it wrong labels every Wi-Fi adapter as Ethernet. */
+static void t_net_classifies_by_more_than_arphrd(void)
+{
+    struct sample s;
+
+    net_iface("eth0", "1\n",   "up\n",      "100\n", "200\n");
+    net_iface("wlan0", "1\n",  "up\n",      "300\n", "400\n");
+    put("sys/class/net/wlan0/wireless/x", "");
+    net_iface("can0", "280\n", "down\n",    "0\n",   "0\n");
+    net_iface("lo", "772\n",   "unknown\n", "7\n",   "7\n");
+    put("sys/class/net/br0/type", "1\n");
+    put("sys/class/net/br0/operstate", "down\n");
+    put("sys/class/net/br0/bridge/x", "");
+
+    io_set_sysroot(dir);
+    T_REQUIRE(sampler_net.open() == 0, "net opens against a synthetic tree");
+    memset(&s, 0, sizeof s);
+    sampler_net.read(&s);
+
+    T_EQ_INT(s.nnet, 5, "every interface in the tree is resolved");
+
+    /* Ordered ethernet, wifi, can, bridge, loopback - fixed for the run,
+     * because the CSV header written at startup describes these columns. */
+    T_EQ_STR(s.net[0].name, "eth0", "ethernet sorts first");
+    T_EQ_STR(s.net[0].kind, "ethernet", "ARPHRD_ETHER with no wireless/ is wired");
+    T_EQ_STR(s.net[1].kind, "wifi", "ARPHRD_ETHER with wireless/ is Wi-Fi");
+    T_EQ_STR(s.net[2].kind, "can", "ARPHRD_CAN is CAN");
+    T_EQ_STR(s.net[3].kind, "bridge", "a bridge/ directory is a bridge");
+    T_EQ_STR(s.net[4].kind, "loopback", "loopback sorts last");
+
+    /* The kernel's own word, trimmed of its newline but not reduced to a
+     * bool: "unknown" is what loopback reports and it is not "down". */
+    T_EQ_STR(s.net[4].operstate, "unknown", "operstate is kept verbatim");
+    T_EQ_STR(s.net[0].operstate, "up", "and the trailing newline is gone");
+
+    sampler_net.close();
+}
+
+/* A counter that cannot be read must not report 0, which is exactly what an
+ * idle link genuinely reports. Same rule as power's three attributes. */
+static void t_net_an_unreadable_counter_is_not_zero(void)
+{
+    struct sample s;
+
+    /* rx_bytes exists, tx_bytes does not. */
+    put("sys/class/net/eth1/type", "1\n");
+    put("sys/class/net/eth1/operstate", "up\n");
+    put("sys/class/net/eth1/statistics/rx_bytes", "4096\n");
+
+    io_set_sysroot(dir);
+    T_REQUIRE(sampler_net.open() == 0, "net opens");
+    memset(&s, 0, sizeof s);
+    sampler_net.read(&s);
+
+    {
+        int found = -1;
+        for (int i = 0; i < s.nnet; i++)
+            if (!strcmp(s.net[i].name, "eth1"))
+                found = i;
+        T_REQUIRE(found >= 0, "eth1 is in the list");
+        T_TRUE(s.net[found].rx_bytes.ok, "a readable counter reads");
+        T_EQ_U64(s.net[found].rx_bytes.v, 4096, "and carries its value");
+        T_TRUE(!s.net[found].tx_bytes.ok, "an absent counter is absent");
+        T_EQ_U64(s.net[found].tx_bytes.v, 0, "and its value is not trusted");
+        /* speed is absent here; a down link reports -1, which is not a
+         * measurement either. */
+        T_TRUE(!s.net[found].speed_mbit.ok, "an absent speed is absent");
+    }
+
+    sampler_net.close();
+}
+
 int main(void)
 {
     char cmd[128];
@@ -240,6 +331,8 @@ int main(void)
     t_envid_finds_build_id_wherever_it_sits();
     t_envid_absent_is_absent();
     t_throttle_sums_every_cpu_column();
+    t_net_classifies_by_more_than_arphrd();
+    t_net_an_unreadable_counter_is_not_zero();
 
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", dir);
     if (system(cmd) != 0)

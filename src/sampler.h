@@ -36,6 +36,7 @@ extern const struct sampler sampler_thermal;
 extern const struct sampler sampler_power;
 extern const struct sampler sampler_fan;
 extern const struct sampler sampler_throttle;
+extern const struct sampler sampler_net;
 extern const struct sampler sampler_npu;
 extern const struct sampler sampler_gpu_busy;
 

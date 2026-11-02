@@ -38,6 +38,18 @@ void emit_set_env(const struct envid *e)
     env = e;
 }
 
+/* One net counter: the value, or null when that file could not be read. They
+ * are separate files under statistics/ and fail independently, and 0 bytes is
+ * what an idle link genuinely reports - so an unreadable one must not claim it. */
+static void jnet_u64(const char *key, const struct net_counter *c)
+{
+    fputs(key, stream());
+    if (c->ok)
+        fprintf(stream(), "%lu", (unsigned long)c->v);
+    else
+        fputs("null", stream());
+}
+
 /* These come from files on disk, so they are not trusted to be JSON-safe. Escaping what the
  * schema calls a string is not optional just because the value "looks like" a version. */
 static void jstr(const char *v)
@@ -148,6 +160,29 @@ void emit_human(const struct sample *s)
                 s->npu_q6_pct, (unsigned long)(s->npu_q6_khz / 1000),
                 s->npu_hvx_pct, s->npu_hmx_pct);
 
+    /* Only the links that are up, with their kind. This form is one line
+     * meant to be read, and seven interfaces times twelve counters is not
+     * that - --json and --csv carry the whole set. A link that is down is
+     * the normal state of most of these and says nothing worth the width;
+     * "unknown", which is what loopback and CAN report, is not down and so
+     * is listed. */
+    if (s->nnet > 0) {
+        int shown = 0;
+
+        fprintf(stream(), "NET [");
+        for (int i = 0; i < s->nnet; i++) {
+            if (!s->net[i].operstate_ok ||
+                !strcmp(s->net[i].operstate, "down"))
+                continue;
+            fprintf(stream(), "%s%s:%s", shown ? " " : "", s->net[i].name,
+                    s->net[i].kind);
+            shown++;
+        }
+        if (!shown)
+            fprintf(stream(), "none up");
+        fprintf(stream(), "] ");
+    }
+
     fprintf(stream(), "LMh [");
     for (int p = 0; p < NPOLICY; p++) {
         fprintf(stream(), "%s%s:", p ? " " : "", POLICY_LABEL[p]);
@@ -257,7 +292,38 @@ void emit_json(const struct sample *s)
         else
             fprintf(stream(), "null");     /* 0 would claim "nothing throttled" */
     }
-    fprintf(stream(), "}}\n");
+    fprintf(stream(), "}");
+
+    /* Network. An array rather than an object keyed by name, because the
+     * interface list is the data here - a consumer wants to iterate it, and
+     * two boards do not have the same keys. Counters are raw: a consumer
+     * with two samples and the `t` on each can divide, and a rate computed
+     * here would be over this sampler's interval, not theirs. */
+    fprintf(stream(), ",\"net\":[");
+    for (int i = 0; i < s->nnet; i++) {
+        fprintf(stream(), "%s{\"name\":", i ? "," : "");
+        jstr(s->net[i].name);
+        fprintf(stream(), ",\"kind\":");
+        jstr(s->net[i].kind);
+        fprintf(stream(), ",\"operstate\":");
+        if (s->net[i].operstate_ok)
+            jstr(s->net[i].operstate);
+        else
+            fprintf(stream(), "null");
+        jnet_u64(",\"carrier\":", &s->net[i].carrier);
+        jnet_u64(",\"mtu\":", &s->net[i].mtu);
+        jnet_u64(",\"speed_mbit\":", &s->net[i].speed_mbit);
+        jnet_u64(",\"rx_bytes\":", &s->net[i].rx_bytes);
+        jnet_u64(",\"tx_bytes\":", &s->net[i].tx_bytes);
+        jnet_u64(",\"rx_packets\":", &s->net[i].rx_packets);
+        jnet_u64(",\"tx_packets\":", &s->net[i].tx_packets);
+        jnet_u64(",\"rx_errors\":", &s->net[i].rx_errors);
+        jnet_u64(",\"tx_errors\":", &s->net[i].tx_errors);
+        jnet_u64(",\"rx_dropped\":", &s->net[i].rx_dropped);
+        jnet_u64(",\"tx_dropped\":", &s->net[i].tx_dropped);
+        fprintf(stream(), "}");
+    }
+    fprintf(stream(), "]}\n");
 }
 
 /* NPU: the NSP has no clock in clk_summary, no devfreq and no OPP table, and its
@@ -313,6 +379,22 @@ void emit_csv_header(const struct sample *s)
     for (int p = 0; p < NPOLICY; p++) {
         fprintf(stream(), ",");
         csv_named("throttle_", POLICY_LABEL[p], "");
+    }
+    /* One group per interface, resolved at open and fixed for the run - the
+     * same contract the zone columns above keep, and the reason net.c does
+     * not rescan. Twelve columns each is wide, but --csv carries the same
+     * data as --json and the header names every one of them. */
+    for (int i = 0; i < s->nnet; i++) {
+        static const char *const attr[] = {
+            "operstate", "carrier", "mtu", "speed_mbit",
+            "rx_bytes", "tx_bytes", "rx_packets", "tx_packets",
+            "rx_errors", "tx_errors", "rx_dropped", "tx_dropped"
+        };
+        for (size_t a = 0; a < sizeof attr / sizeof attr[0]; a++) {
+            fprintf(stream(), ",");
+            csv_named("net_", s->net[i].name, "");
+            fprintf(stream(), "_%s", attr[a]);
+        }
     }
     /* WHY CSV REPEATS THESE ON EVERY ROW instead of taking a meta line like --json.
      * CSV's contract is rectangular data, and a leading comment or second header line is
@@ -381,6 +463,30 @@ void emit_csv(const struct sample *s)
         fprintf(stream(), ",");
         if (s->thr_ok)
             fprintf(stream(), "%lu", s->thr[p]);
+    }
+    for (int i = 0; i < s->nnet; i++) {
+        const struct net_counter *group[] = {
+            &s->net[i].carrier,    &s->net[i].mtu,
+            &s->net[i].speed_mbit, &s->net[i].rx_bytes,
+            &s->net[i].tx_bytes,   &s->net[i].rx_packets,
+            &s->net[i].tx_packets, &s->net[i].rx_errors,
+            &s->net[i].tx_errors,  &s->net[i].rx_dropped,
+            &s->net[i].tx_dropped
+        };
+
+        /* operstate is a string and goes through csv_field: the kernel's
+         * words contain no comma today, but a value that could shift every
+         * column after it is not something to leave to the kernel. */
+        fprintf(stream(), ",");
+        if (s->net[i].operstate_ok)
+            csv_field(s->net[i].operstate);
+        for (size_t a = 0; a < sizeof group / sizeof group[0]; a++) {
+            const struct net_counter *c = group[a];
+
+            fprintf(stream(), ",");
+            if (c->ok)
+                fprintf(stream(), "%lu", (unsigned long)c->v);
+        }
     }
     /* An empty field is this format's null, the same convention every absent reading above
      * uses. csv_field() because these come from files: a value containing a comma or a quote

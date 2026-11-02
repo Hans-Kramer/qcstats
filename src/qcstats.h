@@ -29,6 +29,11 @@ extern const char *POLICY_LABEL[NPOLICY];
 #define QCSTATS_JSON_SCHEMA 1
 
 #define ZONES_MAX       64      /* 48 exist; the scan bound is deliberately higher */
+#define NET_MAX         16      /* 7 on this board: wifi, ethernet, 3x CAN, bridge, lo */
+
+/* One counter and whether it could be read. Named rather than anonymous so the
+ * emitters can take a pointer to one. */
+struct net_counter { uint64_t v; int ok; };
 
 /* One reading, collected before any emitter runs. Two reasons it is a struct and
  * not interleaved printfs: every emitter must describe the *same* sample, and each
@@ -87,6 +92,29 @@ struct sample {
     double   npu_q6_pct, npu_hvx_pct, npu_hmx_pct;
     uint64_t npu_q6_khz;
     int      npu_ok;
+
+    /* Network. One slot per interface resolved at startup, like zone[] above and
+     * for the same reason: a list that grows or shrinks mid-run would shift the
+     * CSV columns the header already described.
+     *
+     * Each counter carries its own flag. They are separate files under
+     * statistics/ and fail independently, and 0 bytes is what an idle link
+     * genuinely reports - so an unreadable counter must not claim it. */
+    struct {
+        char        name[32];
+        const char *kind;               /* ethernet|wifi|can|loopback|... */
+        /* The kernel's own word - up, down, unknown, dormant, lowerlayerdown.
+         * Kept verbatim rather than reduced to a bool: loopback and most CAN
+         * devices report "unknown", which is not the same as down. */
+        char        operstate[16];
+        int         operstate_ok;
+        struct net_counter carrier, mtu, speed_mbit;
+        struct net_counter rx_bytes, tx_bytes;
+        struct net_counter rx_packets, tx_packets;
+        struct net_counter rx_errors, tx_errors;
+        struct net_counter rx_dropped, tx_dropped;
+    } net[NET_MAX];
+    int      nnet;
 };
 
 #endif /* QCSTATS_H */

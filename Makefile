@@ -34,7 +34,8 @@ TARGET := qcstats
 SRCDIR := src
 SRCS   := $(SRCDIR)/main.c $(SRCDIR)/io.c $(SRCDIR)/emit.c \
           $(SRCDIR)/cpu.c $(SRCDIR)/mem.c $(SRCDIR)/gpu.c $(SRCDIR)/thermal.c \
-          $(SRCDIR)/power.c $(SRCDIR)/fan.c $(SRCDIR)/throttle.c $(SRCDIR)/npu.c \
+          $(SRCDIR)/power.c $(SRCDIR)/fan.c $(SRCDIR)/throttle.c \
+          $(SRCDIR)/net.c $(SRCDIR)/npu.c \
           $(SRCDIR)/gputrace.c $(SRCDIR)/envid.c
 OBJS   := $(SRCS:.c=.o)
 DEPS   := $(OBJS:.o=.d)

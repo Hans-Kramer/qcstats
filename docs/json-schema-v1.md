@@ -114,8 +114,8 @@ It is **not** bumped for a new field.
 | `npu.q6_khz` | int | kHz | 768000 idle, 1497600 under load |
 | `npu.hvx_pct` | float | % | HVX vector units (4 on this SoC) |
 | `npu.hmx_pct` | float | % | HMX matrix engine (1); often 0 — see below |
-| `thermal_c` | object | °C | keyed by the **short** zone name, e.g. `cpuss-0-0` |
-| `thermal_c.<zone>` | float \| null | °C | one key per resolved zone; the key stays even if a read fails |
+| `thermal_c` | object | °C | keyed by the **short** sensor name, e.g. `cpuss-0-0` |
+| `thermal_c.<sensor>` | float \| null | °C | one key per resolved sensor; the key stays even if a read fails |
 | `power` | object \| null | | INA232; `null` means the sensor was not found |
 | `power.mw` | int \| null | mW | **measured**, not modelled |
 | `power.mv` | int \| null | mV | ~20 V rail (USB-C PD), not 5 V |
@@ -126,8 +126,67 @@ It is **not** bumped for a new field.
 | `fan.rpm_valid` | bool | — | `false` below state 2 (tachometer misreads), while a fan commanded off is still coasting, or when either reading is absent |
 | `throttle` | object | | keyed by policy label |
 | `throttle.<label>` | int \| null | events | LMh/DCVSh **event counts, not depth** |
+| `net` | array | | one entry per interface, resolved at startup — see below |
+| `net[].name` | string | — | interface name |
+| `net[].kind` | string | — | `ethernet`, `wifi`, `can`, `loopback`, `bridge`, `usb`, `other` |
+| `net[].operstate` | string \| null | — | the kernel's own word: `up`, `down`, `unknown`, `dormant`, `lowerlayerdown` |
+| `net[].carrier` | int \| null | — | 0 or 1; `null` when the driver reports none |
+| `net[].mtu` | int \| null | bytes | |
+| `net[].speed_mbit` | int \| null | Mbit/s | `null` for a link that reports none, and for a down link, which reports `-1` |
+| `net[].rx_bytes` | int \| null | bytes | counter since the interface came up |
+| `net[].tx_bytes` | int \| null | bytes | |
+| `net[].rx_packets` | int \| null | packets | |
+| `net[].tx_packets` | int \| null | packets | |
+| `net[].rx_errors` | int \| null | errors | |
+| `net[].tx_errors` | int \| null | errors | |
+| `net[].rx_dropped` | int \| null | packets | |
+| `net[].tx_dropped` | int \| null | packets | |
 
 ## Semantics a consumer needs to get right
+
+### `net` — three things a consumer needs to know
+
+**`thermal_c` is not only thermal zones.** Nearly every sensor on this board is
+exposed twice, once under `/sys/class/thermal` and once under `/sys/class/hwmon`,
+so the hwmon pass adds only the ones that have *no* zone. On the Ventuno Q that is
+exactly one of 43 hwmon temperature devices: `ath11k_hwmon`, the Wi-Fi radio — and
+it is the hottest sensor on the board by about seven degrees, so its absence was
+not a missing detail but a missing top line.
+
+The rule is "whatever has no zone" rather than a name, because a sensor hard-coded
+by name is one that disappears when a driver renames it. The two trees spell the
+same sensor differently (`cpu-0-0-thermal` against `cpu_0_0_thermal`), so names are
+folded to lowercase-with-underscores before being compared; without that the pass
+would add a second copy of all forty-two duplicates. A device with no zone that
+carries several channels contributes all of them, suffixed `_tempN` past the first.
+
+These resolve by `--zones` like any other sensor (`--zones ath11k_hwmon`), and
+appear in `--all-zones`, in the CSV header as `temp_ath11k_hwmon_c`, and in the
+human line. Additive, so this is still schema 1.
+
+**The interface list is resolved once, at startup.** Like the thermal zones, and
+for the same reason: the CSV header written at startup has to describe every row
+after it, and a list that grew mid-run would shift the columns under a reader.
+The cost is real — a USB CDC link or a container bridge plugged in later is
+missed for the rest of the run. That is consistent with every other source here
+(a sysfs attribute absent at startup stays absent) but it is the one case where
+the thing that appears later is something a person might actually plug in.
+
+**The order is fixed: ethernet, Wi-Fi, CAN, USB, other, bridge, loopback, then
+by name.** `readdir` order is not promised to be stable between runs, and the
+CSV columns are named from this order.
+
+**Counters are raw, not rates.** A consumer with two samples and the `t` on each
+can divide. A rate computed here would be over *this* sampler's interval, which
+is not necessarily the consumer's — and the counters are what the kernel
+actually measured.
+
+One subtlety worth naming, because getting it wrong mislabels every Wi-Fi
+adapter: `kind` is not read from the ARPHRD `type` attribute alone. That
+identifies CAN (280) and loopback (772) outright, but a managed-mode Wi-Fi
+station reports ARPHRD_ETHER (1) exactly as a wired port does. The `wireless/`
+directory or a `phy80211` link is what separates them.
+
 
 - **`cpu` is per policy.** Three policies on the board:
   `A78C.0` = CPU 0–1, `A78C.1` = CPU 2–3, `A55` = CPU 4–7.
@@ -162,6 +221,14 @@ It is **not** bumped for a new field.
 `--csv` carries the same data with a header row, which serves the same self-describing
 role as `v`. Its column set is **fixed for a run** and does not depend on which flags are passed,
 so header and rows always align. Absent is an **empty field** there — same rule, different spelling.
+
+`net` contributes twelve columns per interface, named
+`net_<iface>_<attr>` — eighty-four on this board, which is wide, but `--csv`
+carries the same data as `--json` and the header names every one of them. They
+sit before the two provenance columns, so adding them moved `kernel` and
+`build_id` further right. A reader that indexes by *position* rather than by
+header name sees that as a change; `v` is unchanged, because the JSON contract
+is unchanged and that is what `v` versions.
 
 The last two columns are `kernel` and `build_id`, repeated on every row. That repetition is
 deliberate: a CSV reader expects rectangular data, and the alternative — a comment line or a
