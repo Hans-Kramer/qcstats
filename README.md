@@ -1,5 +1,13 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 <!-- SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer -->
+
+[![Platform](https://img.shields.io/badge/Platform-Arduino%20Ventuno%20Q-00878F?logo=arduino)](https://www.arduino.cc/)
+![Language](https://img.shields.io/badge/language-C-A8B9CC?logo=c&logoColor=white)
+![Dependencies](https://img.shields.io/badge/dependencies-libc%20only-brightgreen)
+[![CI](https://github.com/Hans-Kramer/qcstats/actions/workflows/gate.yml/badge.svg)](https://github.com/Hans-Kramer/qcstats/actions/workflows/gate.yml)
+[![License](https://img.shields.io/badge/license-MPL%202.0-orange.svg)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/Hans-Kramer/qcstats)](https://github.com/Hans-Kramer/qcstats/commits/main)
+
 # qcstats
 
 A telemetry sampler for the **Arduino Ventuno Q**
