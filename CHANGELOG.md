@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The temperature sensors no thermal zone covers.** `thermal_c` was built from
+  `/sys/class/thermal/thermal_zone*` alone, so `ath11k_hwmon` — the Wi-Fi radio, which
+  exists only under `/sys/class/hwmon` — was never sampled. It is the hottest sensor on
+  this board by about seven degrees, so what was missing was not a detail but the top
+  line of the list.
+
+  Surveyed rather than special-cased: of 43 hwmon temperature devices on the board, 42
+  duplicate a thermal zone and exactly one does not. So the rule is "whatever has no
+  zone", not a name — a sensor hard-coded by name disappears when a driver renames it.
+  The two trees spell the same sensor differently (`cpu-0-0-thermal` against
+  `cpu_0_0_thermal`), so names are folded to lowercase-with-underscores before being
+  compared, or the pass would add a second copy of all forty-two. A device with no zone
+  that carries several channels contributes all of them, suffixed `_tempN` past the
+  first, because taking `temp1` alone would drop the rest silently.
+
+  `struct zone_tab` now carries a resolved directory and attribute instead of a zone
+  index, and `zone_lookup()` returns a table slot. A hwmon sensor has no
+  `thermal_zoneN` index to return, and the index was only ever an intermediate that
+  `attach()` turned back into a path — so `thermal.c` no longer knows which tree a
+  sensor came from. It also labels from the table rather than from the string the user
+  typed: abbreviating `cpuss-0-0-thermal` to `cpuss-0-0` is allowed, and two runs that
+  sampled the same sensor must not disagree about its name.
+
+  Visible in `--all-zones` (49 sensors, not 48), by name via `--zones ath11k_hwmon`, in
+  the CSV header as `temp_ath11k_hwmon_c`, and in the human line. Additive, so
+  `json-schema` stays at **1**.
+
+  The captured fixture already held `hwmon45/temp1_input` — `capture-fixture.sh` grabs
+  `temp[0-9]*` for every hwmon — so nothing needed re-capturing. Nothing was reading it.
+
 - **A `net` section: every interface, not just CAN.** Seven on this board — Wi-Fi,
   Ethernet, three CAN buses, the Docker bridge and loopback — with link state, MTU,
   carrier, speed and the eight `statistics/` counters, each carrying its own presence

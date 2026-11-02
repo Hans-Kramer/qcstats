@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: Copyright (c) 2026 Hans Kramer
 //
-// Thermal: 48 zones, resolved by their "type" string. NEVER by index - the five
-// default zones sit at indices 37, 9, 33, 5 and 8 on this board, and the ordering
-// is not guaranteed across boots either.
+// Thermal: every temperature sensor, resolved by its name. NEVER by index - the
+// five default zones sit at indices 37, 9, 33, 5 and 8 on this board, and the
+// ordering is not guaranteed across boots either.
+//
+// Not only thermal zones. zone_table() also returns the hwmon temperatures no
+// zone covers, which on this board is ath11k_hwmon - the Wi-Fi radio, and the
+// hottest sensor on it. This file does not care which tree a sensor came from:
+// the table hands it a directory and an attribute.
 
 #define _GNU_SOURCE
 #include "io.h"
@@ -17,20 +22,19 @@ static struct {
     size_t n;
 } st;
 
-/* Open one zone's temp and record the label we will print for it. */
-static void attach(const char *name, int idx)
+/* Open one sensor and record the label we will print for it. */
+static void attach(const struct zone_tab *z)
 {
-    char zdir[PATH_MAXLEN], *dash;
+    char *dash;
 
     if (st.n >= ZONES_MAX)
         return;
-    spath(zdir, sizeof zdir, THERMAL_DIR "/thermal_zone%d", idx);
     src_init(&st.zone[st.n].temp);
-    src_open_abs(&st.zone[st.n].temp, zdir, "temp");
+    src_open_abs(&st.zone[st.n].temp, z->dir, z->attr);
     if (!src_have(&st.zone[st.n].temp))
         return;
     /* shorten "cpuss-0-0-thermal" -> "cpuss-0-0" */
-    snprintf(st.zone[st.n].label, sizeof st.zone[0].label, "%s", name);
+    snprintf(st.zone[st.n].label, sizeof st.zone[0].label, "%s", z->type);
     dash = strstr(st.zone[st.n].label, "-thermal");
     if (dash)
         *dash = '\0';
@@ -46,19 +50,27 @@ static int thermal_open(void)
      * the user gave, which is why this indexes the table rather than walking it. */
     if (cfg.all_zones) {
         for (size_t i = 0; i < ntab && st.n < ZONES_MAX; i++)
-            attach(tab[i].type, tab[i].idx);
+            attach(&tab[i]);
     } else {
         for (size_t z = 0; z < cfg.nzones && st.n < ZONES_MAX; z++) {
             int idx = zone_lookup(tab, ntab, cfg.zones[z]);
             if (idx < 0) {
-                /* Naming a zone that does not resolve is a user error worth
-                 * reporting; a default that is absent is not. */
+                /* Naming a sensor that does not resolve is a user error
+                 * worth reporting; a default that is absent is not. */
                 if (cfg.zones_explicit)
-                    fprintf(stderr, "qcstats: no thermal zone matches '%s'\n",
+                    fprintf(stderr,
+                            "qcstats: no temperature sensor matches '%s'\n",
                             cfg.zones[z]);
                 continue;
             }
-            attach(cfg.zones[z], idx);
+            /*
+             * The table's own label, not the string the user typed. They
+             * are allowed to abbreviate ("cpuss-0-0" for
+             * "cpuss-0-0-thermal"), and printing back what was typed would
+             * make two runs that sampled the same sensor disagree about
+             * what it is called.
+             */
+            attach(&tab[idx]);
         }
     }
     return st.n ? 0 : -1;

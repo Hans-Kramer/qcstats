@@ -284,11 +284,78 @@ static void t_a_missing_tree_is_all_absence(void)
     T_HASNT(j, "\"used_mb\":0", "nor memory in use");
 }
 
+/*
+ * The sensor that has no thermal zone.
+ *
+ * ath11k_hwmon exists only under /sys/class/hwmon, and the captured fixture
+ * has held its reading all along - nothing was looking there. It is the
+ * hottest sensor on this board, so its absence was not a rounding error in
+ * the output; it was the top line missing from it.
+ */
+static void t_a_sensor_with_no_zone_reaches_the_output(void)
+{
+    const char *j;
+    long mc;
+    char want[128], alt[128];
+    const char **saved_zones = cfg.zones;
+    size_t saved_n = cfg.nzones;
+    int saved_all = cfg.all_zones;
+
+    cfg.all_zones = 1;
+    io_set_sysroot(FIXTURE);
+    j = sample_json(2);
+    io_set_sysroot("");
+    cfg.all_zones = saved_all;
+    cfg.zones = saved_zones;
+    cfg.nzones = saved_n;
+
+    mc = fixture_long("sys/class/hwmon/hwmon45/temp1_input");
+    T_TRUE(mc > 20000 && mc < 120000,
+           "the fixture's ath11k_hwmon holds a plausible temperature");
+
+    /* With the delimiter, so a broken conversion printing 440.0 cannot
+     * satisfy a bare "44.0" match. */
+    snprintf(want, sizeof want, "\"ath11k_hwmon\":%.1f,", mc / 1000.0);
+    snprintf(alt, sizeof alt, "\"ath11k_hwmon\":%.1f}", mc / 1000.0);
+    T_TRUE(strstr(j, want) != NULL || strstr(j, alt) != NULL,
+           "the hwmon sensor no zone covers, converted and formatted");
+
+    /* And the zones are all still there beside it: the hwmon pass adds,
+     * it does not replace. */
+    T_HAS(j, "\"cpuss-0-0\":", "the zones are unaffected");
+}
+
+/*
+ * A sensor named explicitly resolves whichever tree it lives in, and is
+ * labelled by the table rather than by what was typed - two runs that
+ * sampled the same sensor must not disagree about its name.
+ */
+static void t_a_named_hwmon_sensor_resolves(void)
+{
+    const char *j;
+    static const char *one[] = { "ath11k_hwmon" };
+    const char **saved_zones = cfg.zones;
+    size_t saved_n = cfg.nzones;
+
+    cfg.zones = one;
+    cfg.nzones = 1;
+    io_set_sysroot(FIXTURE);
+    j = sample_json(2);
+    io_set_sysroot("");
+    cfg.zones = saved_zones;
+    cfg.nzones = saved_n;
+
+    T_HAS(j, "\"ath11k_hwmon\":", "named on its own, it is sampled");
+    T_HASNT(j, "\"cpuss-0-0\":", "and nothing else is");
+}
+
 int main(void)
 {
     t_the_transformations_hold();
     t_a_frozen_tree_reports_no_load();
     t_one_reading_is_not_enough_either();
     t_a_missing_tree_is_all_absence();
+    t_a_sensor_with_no_zone_reaches_the_output();
+    t_a_named_hwmon_sensor_resolves();
     return t_summary("sample");
 }

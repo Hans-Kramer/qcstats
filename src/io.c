@@ -204,6 +204,84 @@ int hwmon_find(const char *want, char *out, size_t len)
     return rc;
 }
 
+/* Fold a sensor name to one spelling, so the two trees can be compared: they
+ * spell the same sensor "cpu-0-0-thermal" and "cpu_0_0_thermal". */
+static void fold(char *dst, size_t len, const char *src)
+{
+    size_t i;
+
+    snprintf(dst, len, "%s", src);
+    for (i = 0; dst[i]; i++) {
+        if (dst[i] == '-')
+            dst[i] = '_';
+        else if (dst[i] >= 'A' && dst[i] <= 'Z')
+            dst[i] = (char)(dst[i] - 'A' + 'a');
+    }
+}
+
+static int have_sensor(const struct zone_tab *t, size_t n, const char *folded)
+{
+    char seen[64];
+
+    for (size_t i = 0; i < n; i++) {
+        fold(seen, sizeof seen, t[i].type);
+        if (strcmp(seen, folded) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+/*
+ * The hwmon temperatures that no thermal zone covers.
+ *
+ * "Whatever has no zone" rather than a name: a sensor hard-coded by name is
+ * one that disappears when a driver renames it. On this board the rule finds
+ * exactly one, the Wi-Fi radio.
+ */
+static size_t hwmon_orphans(struct zone_tab *t, size_t n, size_t max)
+{
+    char path[PATH_MAXLEN], name[64], folded[64];
+    struct dirent *e;
+    DIR *d;
+
+    spath(path, sizeof path, HWMON_DIR);
+    d = opendir(path);
+    if (!d)
+        return n;
+
+    while ((e = readdir(d)) && n < max) {
+        if (strncmp(e->d_name, "hwmon", 5) != 0)
+            continue;
+        spath(path, sizeof path, HWMON_DIR "/%.32s/name", e->d_name);
+        if (read_file_str(path, name, sizeof name) < 0)
+            continue;
+        fold(folded, sizeof folded, name);
+        if (have_sensor(t, n, folded))
+            continue;
+
+        /* Every channel, not only temp1: a device with no zone may carry
+         * several and taking the first would silently drop the rest. Only
+         * past the first is the label suffixed, so the common
+         * single-channel case reads as the device's own name. */
+        for (int ch = 1; ch <= 8 && n < max; ch++) {
+            spath(path, sizeof path, HWMON_DIR "/%.32s/temp%d_input",
+                  e->d_name, ch);
+            if (access(path, R_OK) != 0)
+                continue;
+            if (ch == 1)
+                snprintf(t[n].type, sizeof t[0].type, "%s", name);
+            else
+                snprintf(t[n].type, sizeof t[0].type, "%.48s_temp%d", name,
+                         ch);
+            spath(t[n].dir, sizeof t[0].dir, HWMON_DIR "/%.32s", e->d_name);
+            snprintf(t[n].attr, sizeof t[0].attr, "temp%d_input", ch);
+            n++;
+        }
+    }
+    closedir(d);
+    return n;
+}
+
 /* Read every zone's type once: resolution then costs 64 reads no matter how many
  * zones are selected. Matching per name against the tree instead cost ~1500 opens
  * for 48 zones - and before the fd cache, that was per *sample*. */
@@ -216,10 +294,13 @@ size_t zone_table(struct zone_tab *t, size_t max)
         spath(path, sizeof path, THERMAL_DIR "/thermal_zone%d/type", i);
         if (read_file_str(path, t[n].type, sizeof t[0].type) < 0)
             continue;
-        t[n].idx = i;
+        spath(t[n].dir, sizeof t[0].dir, THERMAL_DIR "/thermal_zone%d", i);
+        snprintf(t[n].attr, sizeof t[0].attr, "temp");
         n++;
     }
-    return n;
+
+    /* After the zones, so the dedupe has something to compare against. */
+    return hwmon_orphans(t, n, max);
 }
 
 /* Accepts the bare name ("cpuss-0-0") as well as the full type, because the bare
@@ -231,10 +312,10 @@ int zone_lookup(const struct zone_tab *t, size_t n, const char *want)
 
     for (size_t i = 0; i < n; i++) {
         if (strcmp(t[i].type, want) == 0)
-            return t[i].idx;
+            return (int)i;
         if (strncmp(t[i].type, want, wl) == 0
             && strcmp(t[i].type + wl, "-thermal") == 0)
-            return t[i].idx;
+            return (int)i;
     }
     return -1;
 }

@@ -68,9 +68,29 @@ void spath(char *out, size_t len, const char *fmt, ...);
 int  read_file_str(const char *path, char *buf, size_t len);
 int  hwmon_find(const char *want, char *out, size_t len);
 
-/* Thermal zones, resolved in one pass over the thermal_zone type attributes. */
-struct zone_tab { char type[64]; int idx; };
+/*
+ * Every temperature sensor, resolved in one pass.
+ *
+ * Carries the directory and the attribute rather than a zone index, because
+ * not every sensor is a thermal zone. Nearly all of them appear twice on
+ * this board - once under /sys/class/thermal and once under /sys/class/hwmon
+ * - but ath11k_hwmon appears only in the second, and it is the hottest
+ * sensor on the board by about seven degrees. An index into thermal_zoneN
+ * cannot name it.
+ *
+ * `dir` is sysroot-prefixed, like hwmon_find()'s output, so it goes straight
+ * to src_open_abs(). `attr` is "temp" for a zone and "tempN_input" for a
+ * hwmon channel.
+ */
+struct zone_tab {
+    char type[64];              /* the label: zone type, or hwmon name */
+    char dir[PATH_MAXLEN];      /* prefixed, ready for src_open_abs() */
+    char attr[16];
+};
 size_t zone_table(struct zone_tab *t, size_t max);
+
+/* The table slot matching `want`, or -1. An index into `t`, not a zone
+ * index: a hwmon sensor has no zone index to return. */
 int    zone_lookup(const struct zone_tab *t, size_t n, const char *want);
 
 #endif /* QCSTATS_IO_H */

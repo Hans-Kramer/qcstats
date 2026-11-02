@@ -114,8 +114,8 @@ It is **not** bumped for a new field.
 | `npu.q6_khz` | int | kHz | 768000 idle, 1497600 under load |
 | `npu.hvx_pct` | float | % | HVX vector units (4 on this SoC) |
 | `npu.hmx_pct` | float | % | HMX matrix engine (1); often 0 — see below |
-| `thermal_c` | object | °C | keyed by the **short** zone name, e.g. `cpuss-0-0` |
-| `thermal_c.<zone>` | float \| null | °C | one key per resolved zone; the key stays even if a read fails |
+| `thermal_c` | object | °C | keyed by the **short** sensor name, e.g. `cpuss-0-0` |
+| `thermal_c.<sensor>` | float \| null | °C | one key per resolved sensor; the key stays even if a read fails |
 | `power` | object \| null | | INA232; `null` means the sensor was not found |
 | `power.mw` | int \| null | mW | **measured**, not modelled |
 | `power.mv` | int \| null | mV | ~20 V rail (USB-C PD), not 5 V |
@@ -145,6 +145,24 @@ It is **not** bumped for a new field.
 ## Semantics a consumer needs to get right
 
 ### `net` — three things a consumer needs to know
+
+**`thermal_c` is not only thermal zones.** Nearly every sensor on this board is
+exposed twice, once under `/sys/class/thermal` and once under `/sys/class/hwmon`,
+so the hwmon pass adds only the ones that have *no* zone. On the Ventuno Q that is
+exactly one of 43 hwmon temperature devices: `ath11k_hwmon`, the Wi-Fi radio — and
+it is the hottest sensor on the board by about seven degrees, so its absence was
+not a missing detail but a missing top line.
+
+The rule is "whatever has no zone" rather than a name, because a sensor hard-coded
+by name is one that disappears when a driver renames it. The two trees spell the
+same sensor differently (`cpu-0-0-thermal` against `cpu_0_0_thermal`), so names are
+folded to lowercase-with-underscores before being compared; without that the pass
+would add a second copy of all forty-two duplicates. A device with no zone that
+carries several channels contributes all of them, suffixed `_tempN` past the first.
+
+These resolve by `--zones` like any other sensor (`--zones ath11k_hwmon`), and
+appear in `--all-zones`, in the CSV header as `temp_ath11k_hwmon_c`, and in the
+human line. Additive, so this is still schema 1.
 
 **The interface list is resolved once, at startup.** Like the thermal zones, and
 for the same reason: the CSV header written at startup has to describe every row
