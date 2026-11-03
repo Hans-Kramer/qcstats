@@ -223,6 +223,25 @@ static void t_throttle_sums_every_cpu_column(void)
     T_EQ_U64(s.thr[2], 36000, "and policy 2's");
 }
 
+/* A symlink, relative target kept verbatim - the point of the usb test below is that the
+ * text sysfs stores is relative and only means anything once resolved. */
+static void mklink(const char *rel, const char *target)
+{
+    char path[320], cmd[640];
+    char *slash;
+
+    snprintf(path, sizeof path, "%s/%s", dir, rel);
+    if ((slash = strrchr(path, '/')) != NULL) {
+        *slash = '\0';
+        snprintf(cmd, sizeof cmd, "mkdir -p '%s'", path);
+        if (system(cmd) != 0)
+            exit(2);
+        *slash = '/';
+    }
+    if (symlink(target, path) != 0)
+        exit(2);
+}
+
 /* ---- net: classification, ordering, and absent-vs-zero -------------------------- */
 
 static void net_iface(const char *name, const char *type, const char *oper,
@@ -388,6 +407,120 @@ static void t_net_an_unreadable_counter_is_not_zero(void)
     sampler_net.close();
 }
 
+/*
+ * The usb kind, which no board could ever report until 2026-11-03.
+ *
+ * classify() read the `device` link with readlink() and searched the result for "usb".
+ * sysfs stores that target RELATIVE - "../../../1-1:1.0" for a USB adapter - so the bus was
+ * never in the text, the branch could not match on any hardware, and a USB ethernet dongle
+ * came back "ethernet". It is only in the RESOLVED path, which is why this tree reproduces
+ * the shape that makes the difference: /sys/class/net entries are symlinks into
+ * /sys/devices, so the relative target resolves against the device tree and not against
+ * /sys/class/net.
+ */
+static void t_net_finds_the_usb_bus_by_resolving_the_device_link(void)
+{
+    struct sample s;
+    char cmd[640];
+    const char *usb_kind = NULL, *eth_kind = NULL;
+    int i;
+
+    /* Only these two interfaces, whatever earlier cases left behind. */
+    snprintf(cmd, sizeof cmd, "rm -rf '%s/sys/class/net' '%s/sys/devices'", dir, dir);
+    if (system(cmd) != 0)
+        exit(2);
+
+#define USBDEV "sys/devices/platform/soc/usb1/1-1/1-1:1.0/net/usb0"
+    put(USBDEV "/type", "1\n");                 /* ARPHRD_ETHER, as a dongle reports */
+    put(USBDEV "/operstate", "up\n");
+    put(USBDEV "/mtu", "1500\n");
+    put(USBDEV "/statistics/rx_bytes", "1\n");
+    put(USBDEV "/statistics/tx_bytes", "2\n");
+    /* Three levels up from the net device is the USB interface it hangs off. */
+    mklink(USBDEV "/device", "../../../1-1:1.0");
+    mklink("sys/class/net/usb0", "../../devices/platform/soc/usb1/1-1/1-1:1.0/net/usb0");
+
+    /* The control, and the test is worth little without it: same ARPHRD, no wireless/ or
+     * bridge/, and a parent chain with no USB in it. Returning "usb" for everything would
+     * otherwise pass. */
+#define ETHDEV "sys/devices/platform/soc/23040000.ethernet/net/end0"
+    put(ETHDEV "/type", "1\n");
+    put(ETHDEV "/operstate", "down\n");
+    put(ETHDEV "/mtu", "1500\n");
+    put(ETHDEV "/statistics/rx_bytes", "0\n");
+    put(ETHDEV "/statistics/tx_bytes", "0\n");
+    /* Three levels up, exactly as the board stores it - two makes realpath() fail, and
+     * then this control passes because the branch returned early rather than because it
+     * judged the chain. A mutation that calls everything usb caught that. */
+    mklink(ETHDEV "/device", "../../../23040000.ethernet");
+    mklink("sys/class/net/end0", "../../devices/platform/soc/23040000.ethernet/net/end0");
+
+    io_set_sysroot(dir);
+    T_REQUIRE(sampler_net.open() == 0, "net opens against a device tree");
+    memset(&s, 0, sizeof s);
+    sampler_net.read(&s);
+    io_set_sysroot("");
+
+    T_EQ_INT(s.nnet, 2, "both interfaces resolve through their class symlinks");
+    for (i = 0; i < s.nnet; i++) {
+        if (!strcmp(s.net[i].name, "usb0")) usb_kind = s.net[i].kind;
+        if (!strcmp(s.net[i].name, "end0")) eth_kind = s.net[i].kind;
+    }
+    T_REQUIRE(usb_kind && eth_kind, "both are present by name");
+    T_EQ_STR(usb_kind, "usb", "a chain through the USB bus is usb, not ethernet");
+    T_EQ_STR(eth_kind, "ethernet", "and a platform chain stays ethernet");
+#undef USBDEV
+#undef ETHDEV
+}
+
+/*
+ * The fixture-path trap. The bus is looked for in the RESOLVED path, which under
+ * QCSTATS_SYSROOT carries the sysroot's own directory name - so a fixture living anywhere
+ * under a path with "usb" in it would make every interface on it "usb". That is a false
+ * positive nobody would think to look for, and this is the case that forbids it.
+ */
+static void t_net_ignores_usb_in_the_sysroot_path(void)
+{
+    struct sample s;
+    char trap[64], saved[64], cmd[640];
+    const char *kind = NULL;
+    int i;
+
+    snprintf(trap, sizeof trap, "/tmp/qcstats-usbtrap.XXXXXX");
+    if (!mkdtemp(trap)) {
+        T_FAIL("%s", "cannot create the trap directory");
+        return;
+    }
+    snprintf(saved, sizeof saved, "%s", dir);
+    snprintf(dir, sizeof dir, "%s", trap);          /* put()/mklink() build in here */
+
+    put("sys/devices/platform/soc/23040000.ethernet/net/end0/type", "1\n");
+    put("sys/devices/platform/soc/23040000.ethernet/net/end0/operstate", "up\n");
+    put("sys/devices/platform/soc/23040000.ethernet/net/end0/mtu", "1500\n");
+    put("sys/devices/platform/soc/23040000.ethernet/net/end0/statistics/rx_bytes", "0\n");
+    put("sys/devices/platform/soc/23040000.ethernet/net/end0/statistics/tx_bytes", "0\n");
+    mklink("sys/devices/platform/soc/23040000.ethernet/net/end0/device",
+           "../../../23040000.ethernet");
+    mklink("sys/class/net/end0", "../../devices/platform/soc/23040000.ethernet/net/end0");
+
+    io_set_sysroot(trap);
+    T_REQUIRE(sampler_net.open() == 0, "net opens under a sysroot named ...usbtrap...");
+    memset(&s, 0, sizeof s);
+    sampler_net.read(&s);
+    io_set_sysroot("");
+
+    for (i = 0; i < s.nnet; i++)
+        if (!strcmp(s.net[i].name, "end0"))
+            kind = s.net[i].kind;
+    T_REQUIRE(kind != NULL, "the interface is there to be judged");
+    T_EQ_STR(kind, "ethernet", "\"usb\" in the sysroot path does not make an interface usb");
+
+    snprintf(dir, sizeof dir, "%s", saved);
+    snprintf(cmd, sizeof cmd, "rm -rf '%s'", trap);
+    if (system(cmd) != 0)
+        T_FAIL("%s", "the trap directory was left behind");
+}
+
 int main(void)
 {
     char cmd[128];
@@ -406,6 +539,8 @@ int main(void)
     t_envid_absent_is_absent();
     t_throttle_sums_every_cpu_column();
     t_net_classifies_by_more_than_arphrd();
+    t_net_finds_the_usb_bus_by_resolving_the_device_link();
+    t_net_ignores_usb_in_the_sysroot_path();
     t_net_an_unreadable_counter_is_not_zero();
     t_uptime_is_whole_seconds_and_absent_when_missing();
     t_swap_none_configured_is_a_reading_not_absence();

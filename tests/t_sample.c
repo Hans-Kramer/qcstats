@@ -378,13 +378,13 @@ static void t_the_network_surface_classifies_every_kind(void)
      * looks at the bus - mutate that comparison and this interface falls through to
      * "other".
      *
-     * The absence of the usb kind below is NOT that ordering working. The usb branch
-     * reads `device` with readlink(), which hands back the RELATIVE text
-     * "../../../3-1:1.0"; only the resolved path holds "usb". So the usb kind cannot be
-     * reached on this board, or on any other - see TODO.md. This asserts the behaviour
-     * that exists, and is named for what it actually shows. */
+     * The usb kind does not appear below, and the reason is about the FIXTURE rather than
+     * the code: the bus is found by resolving the `device` link, and a captured tree holds
+     * an empty stub at the target instead of the device chain, so the resolved path carries
+     * no bus. The usb branch is exercised against a tree shaped like real sysfs in
+     * tests/t_units.c, and on the board. */
     T_HAS(j, "\"name\":\"can0\",\"kind\":\"can\"", "an ARPHRD_CAN link is can");
-    T_HASNT(j, "\"kind\":\"usb\"", "and the usb kind appears nowhere, reachable or not");
+    T_HASNT(j, "\"kind\":\"usb\"", "and no kind here comes from the bus");
 
     /* Schema rule 1 on a source that is genuinely refused rather than merely zero:
      * reading `carrier` on a down CAN link returns EINVAL, so the capture left it out. */

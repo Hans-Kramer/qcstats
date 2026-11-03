@@ -27,6 +27,7 @@
 
 #include <dirent.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -89,6 +90,41 @@ static uint64_t read_u64_at(const char *iface, const char *attr, int *ok)
 }
 
 /*
+ * Whether this interface's parent chain runs through the USB bus.
+ *
+ * readlink() is not enough, and used to be what this did: sysfs stores a `device` target
+ * RELATIVE - "../../../3-1:1.0" for a USB CAN adapter on this board - so the bus never
+ * appears in the text and the usb kind was unreachable on any hardware. It is only in the
+ * resolved path: /sys/devices/platform/a4f8800.usb/.../usb3/3-1/3-1:1.0.
+ *
+ * Under QCSTATS_SYSROOT the prefix is skipped, so a fixture that happens to live under a
+ * directory with "usb" in its name cannot answer a question about the board.
+ */
+static int on_the_usb_bus(const char *iface)
+{
+    char path[PATH_MAXLEN];
+    char *real, *root;
+    const char *tail;
+    int found;
+
+    spath(path, sizeof path, NET_DIR "/%s/device", iface);
+    if ((real = realpath(path, NULL)) == NULL)
+        return 0;
+
+    tail = real;
+    if (sysroot && sysroot[0] && (root = realpath(sysroot, NULL)) != NULL) {
+        size_t n = strlen(root);
+
+        if (!strncmp(real, root, n))
+            tail = real + n;
+        free(root);
+    }
+    found = strstr(tail, "usb") != NULL;
+    free(real);
+    return found;
+}
+
+/*
  * The ARPHRD type identifies CAN and loopback outright, but not Wi-Fi: a
  * managed-mode station reports ARPHRD_ETHER (1) exactly as a wired port
  * does, so the wireless directory is what tells them apart.
@@ -106,21 +142,8 @@ static const char *classify(const char *iface)
         return "wifi";
     if (exists_at(iface, "bridge"))
         return "bridge";
-    /* A USB CDC link is an ethernet device whose parent chain runs through a
-     * USB controller, and the device symlink is the only place that shows. */
-    {
-        char path[PATH_MAXLEN];
-        char link[PATH_MAXLEN];
-        ssize_t n;
-
-        spath(path, sizeof path, NET_DIR "/%s/device", iface);
-        n = readlink(path, link, sizeof link - 1);
-        if (n > 0) {
-            link[n] = '\0';
-            if (strstr(link, "usb"))
-                return "usb";
-        }
-    }
+    if (on_the_usb_bus(iface))
+        return "usb";
     if (ok && type == ARPHRD_ETHER)
         return "ethernet";
     return "other";

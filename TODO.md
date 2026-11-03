@@ -3,34 +3,17 @@
 # TODO
 
 Open work on `qcstats`, and one standing fact at the end that a reader of this file would
-otherwise ask about. What was fixed, and why, is in `CHANGELOG.md`; the JSON contract is in
-`docs/json-schema-v1.md`.
+otherwise ask about. **No defects are open.** What was fixed, and why, is in
+`CHANGELOG.md`; the JSON contract is in `docs/json-schema-v1.md`.
 
 Items marked **[measured]** were checked against the board; anything else is read from the
 source and not yet confirmed on hardware.
 
 ---
 
-## Defects
-
-- **`kind` can never be `"usb"`.** `iface_kind()` in `src/net.c` identifies a USB-attached
-  interface by reading its `device` link and looking for `usb` in the result — but
-  `readlink()` hands back the *relative* text sysfs stores, which on this board is
-  `../../../3-1:1.0` for a USB CAN adapter. Only the resolved path carries the bus:
-  `/sys/devices/platform/a4f8800.usb/a400000.usb/xhci-hcd.0.auto/usb3/3-1/3-1:1.0`. Since
-  sysfs `device` links are always relative, the branch cannot match on any board, and a USB
-  ethernet dongle is reported as `ethernet`. Nothing reports a wrong *number* — only a
-  wrong `kind` — which is why this is listed here and not as a release blocker.
-
-  A fix has a second half to it. Resolving the link is one line, but a captured fixture
-  cannot then cover the case: `/sys/class/net/<if>` is itself a symlink into
-  `/sys/devices/...` on a real board, so the relative text only resolves correctly when the
-  capture reproduces that shape too. Either the capture grows a device-tree mirror, or this
-  stays a hardware-only check. **[measured]**
-
 ## Gaps
 
-- **A second captured fixture.** `make test` runs 308 checks against one real tree, and
+- **A second captured fixture.** `make test` runs 316 checks against one real tree, and
   `tests/t_units.c` builds its own synthetic trees for the shapes nobody can capture. What
   is missing is another real board: one capture proves the code handles that capture.
   Blocked on hardware.

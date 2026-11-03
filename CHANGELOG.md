@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`kind` could never be `"usb"`.** `classify()` identified a USB-attached interface by
+  reading its `device` link and searching the result for `usb` — but `readlink()` hands back
+  the *relative* text sysfs stores, `../../../3-1:1.0` for the USB CAN adapters on this
+  board. The bus appears only in the resolved path,
+  `/sys/devices/platform/a4f8800.usb/a400000.usb/xhci-hcd.0.auto/usb3/3-1/3-1:1.0`, so the
+  branch could not match on any hardware and a USB ethernet dongle was reported `ethernet`.
+  The link is now resolved.
+
+  Proven on the board rather than only in a fixture: with the `ARPHRD_CAN` short-circuit
+  disabled so the bus has to answer, the three CAN adapters come back `usb` against real
+  sysfs, while the platform `end0` and the PCI `wlp3s0` do not. Unmutated, every
+  classification on the board is unchanged.
+
+  The resolved path carries the sysroot's own directory name under `QCSTATS_SYSROOT`, so the
+  prefix is skipped before the search — otherwise a fixture stored anywhere beneath a path
+  containing `usb` would report every interface on it as `usb`, which is a false positive
+  nobody would think to look for. `tests/t_units.c` builds its tree under a directory
+  deliberately named `...usbtrap...` to forbid it.
+
+  Three mutations prove the new checks: going back to `readlink()` reproduces the defect
+  exactly; calling everything `usb` reddens the control; and ignoring the sysroot prefix
+  reddens the trap. The second of those **found a vacuous control** in the first draft of the
+  test — the `device` link was built two levels up instead of three, so `realpath()` failed
+  and the control was passing because the branch returned early, not because it judged the
+  chain.
+
+  Coverage is a synthetic tree rather than the captured fixture because the shape that
+  matters cannot be captured: on a real board `/sys/class/net/<if>` is itself a symlink into
+  `/sys/devices/...`, and the relative target only resolves to the bus against the device
+  tree. A fixture that reproduced that would have to mirror the whole chain.
+
 ### Added
 
 - **The fixture now carries `/sys/class/net`, and the samplers under test are the program's
