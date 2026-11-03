@@ -204,9 +204,28 @@ void emit_json(const struct sample *s)
      * else. Bump it only for a BREAKING change - see docs/json-schema-v1.md. */
     fprintf(stream(), "{\"v\":%d,\"t\":%.3f", QCSTATS_JSON_SCHEMA, s->t);
 
+    /* Beside t, because it answers the same kind of question and a consumer that
+     * displays "up N" cannot derive it from t: the wall clock says nothing about
+     * when the board started. */
+    fprintf(stream(), ",\"uptime_s\":");
+    if (s->uptime_ok)
+        fprintf(stream(), "%lu", s->uptime_s);
+    else
+        fprintf(stream(), "null");
+
     fprintf(stream(), ",\"ram\":");
     if (s->ram_ok)
-        fprintf(stream(), "{\"used_mb\":%lu,\"total_mb\":%lu}", s->ram_used_mb, s->ram_total_mb);
+        fprintf(stream(), "{\"used_mb\":%lu,\"total_mb\":%lu,\"available_mb\":%lu}",
+                s->ram_used_mb, s->ram_total_mb, s->ram_avail_mb);
+    else
+        fprintf(stream(), "null");
+
+    /* A total of 0 here is a reading - "no swap configured" - and null is the
+     * different fact that /proc/meminfo carried no swap fields at all. */
+    fprintf(stream(), ",\"swap\":");
+    if (s->swap_ok)
+        fprintf(stream(), "{\"used_mb\":%lu,\"total_mb\":%lu}",
+                s->swap_used_mb, s->swap_total_mb);
     else
         fprintf(stream(), "null");
 
@@ -362,7 +381,8 @@ static void csv_named(const char *prefix, const char *label, const char *suffix)
 
 void emit_csv_header(const struct sample *s)
 {
-    fprintf(stream(), "t,ram_used_mb,ram_total_mb");
+    fprintf(stream(), "t,uptime_s,ram_used_mb,ram_total_mb,ram_available_mb"
+                      ",swap_used_mb,swap_total_mb");
     for (int p = 0; p < NPOLICY; p++) {
         fprintf(stream(), ",");
         csv_named("", POLICY_LABEL[p], "_mhz");
@@ -409,8 +429,17 @@ void emit_csv_header(const struct sample *s)
 void emit_csv(const struct sample *s)
 {
     fprintf(stream(), "%.3f,", s->t);
+    if (s->uptime_ok)
+        fprintf(stream(), "%lu", s->uptime_s);
+    fprintf(stream(), ",");
     if (s->ram_ok)
-        fprintf(stream(), "%lu,%lu", s->ram_used_mb, s->ram_total_mb);
+        fprintf(stream(), "%lu,%lu,%lu", s->ram_used_mb, s->ram_total_mb,
+                s->ram_avail_mb);
+    else
+        fprintf(stream(), ",,");
+    fprintf(stream(), ",");
+    if (s->swap_ok)
+        fprintf(stream(), "%lu,%lu", s->swap_used_mb, s->swap_total_mb);
     else
         fprintf(stream(), ",");
     for (int p = 0; p < NPOLICY; p++) {

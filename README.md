@@ -34,7 +34,8 @@ VDD_IN 10800mW (20.1V 539mA) FAN 40%@2658rpm LMh [A78C.0:0 A78C.1:0 A55:0]
 
 - **CPU** — per-core utilisation and per-cluster frequency, across all three frequency
   policies (four Cortex-A78C cores in two policies, four A55)
-- **Memory** — used and total
+- **Memory** — used, total and available, plus swap when the kernel has it (a total of 0 means none configured, which is a reading rather than a gap)
+- **Uptime** — seconds since boot, which the wall clock cannot give you on a board with no battery-backed RTC
 - **GPU** — Adreno frequency, and with `--gpu-busy` the true busy percentage
 - **NPU** — Hexagon NSP utilisation and clock, with `--npu`
 - **Temperatures** — five zones by default, or any of the 48 the board exposes

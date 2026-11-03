@@ -27,8 +27,8 @@ static void mem_sample(struct sample *s)
 {
     int rc;
     static char blob[8192];
-    uint64_t total = 0, avail = 0;
-    int have_total = 0, have_avail = 0;
+    uint64_t total = 0, avail = 0, swtotal = 0, swfree = 0;
+    int have_total = 0, have_avail = 0, have_swtotal = 0, have_swfree = 0;
     char *line, *save = NULL;
 
     /* The whole file is parsed, so a read that stopped at the buffer is not usable: the
@@ -51,6 +51,10 @@ static void mem_sample(struct sample *s)
             have_total = 1;
         if (sscanf(line, "MemAvailable: %lu kB", &avail) == 1)
             have_avail = 1;
+        if (sscanf(line, "SwapTotal: %lu kB", &swtotal) == 1)
+            have_swtotal = 1;
+        if (sscanf(line, "SwapFree: %lu kB", &swfree) == 1)
+            have_swfree = 1;
     }
     /* BOTH are required. With MemAvailable missing, avail stayed 0 and "used"
      * came out equal to total - a confident claim that all RAM is in use. */
@@ -58,7 +62,18 @@ static void mem_sample(struct sample *s)
         return;
     s->ram_used_mb  = (total - avail) / 1024;
     s->ram_total_mb = total / 1024;
+    s->ram_avail_mb = avail / 1024;
     s->ram_ok = 1;
+
+    /* Both fields or neither. A kernel built without swap carries no SwapTotal line
+     * at all, which is absent; a kernel with swap support and nothing swapped on
+     * carries SwapTotal: 0, which is the reading "none configured". The two must not
+     * look alike. */
+    if (have_swtotal && have_swfree) {
+        s->swap_total_mb = swtotal / 1024;
+        s->swap_used_mb  = (swtotal - swfree) / 1024;
+        s->swap_ok = 1;
+    }
 }
 
 static void mem_close(void) { src_close(&meminfo); }

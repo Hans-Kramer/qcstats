@@ -30,6 +30,7 @@ struct sampler {
 /* One instance of each per process, so state is file-scope inside each module
  * rather than handed around as an opaque pointer. */
 extern const struct sampler sampler_mem;
+extern const struct sampler sampler_uptime;
 extern const struct sampler sampler_cpu;
 extern const struct sampler sampler_gpu;
 extern const struct sampler sampler_thermal;

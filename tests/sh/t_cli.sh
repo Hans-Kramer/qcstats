@@ -114,7 +114,7 @@ case "$(echo "$out" | tail -1)" in '{"v":1,"t":'*) t_ok 0 "and the sample carrie
 run --csv --count 1
 t_eq "$rc" 0 "--csv exits 0"
 t_eq "$(echo "$out" | wc -l)" 2 "and is a header plus one row"
-t_has "$(echo "$out" | head -1)" "t,ram_used_mb" "the header names the columns"
+t_has "$(echo "$out" | head -1)" "t,uptime_s,ram_used_mb" "the header names the columns"
 t_hasnt "$out" '{"v"' "and there is no JSON in it"
 
 run --plain --count 1
@@ -127,7 +127,7 @@ t_has "$out" "RAM " "no format flag means --plain"
 
 # One `mode` variable, assigned in argv order, so the last format given wins. Both ways.
 run --json --csv --count 1
-t_has "$(echo "$out" | head -1)" "t,ram_used_mb" "--json then --csv is CSV"
+t_has "$(echo "$out" | head -1)" "t,uptime_s,ram_used_mb" "--json then --csv is CSV"
 run --csv --json --count 1
 case "$(echo "$out" | head -1)" in '{"v":1,"meta":'*) t_ok 0 "--csv then --json is JSON" ;;
     *) t_ok 1 "--csv then --json did not produce JSON" ;; esac

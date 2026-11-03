@@ -41,8 +41,20 @@ struct net_counter { uint64_t v; int ok; };
 struct sample {
     double   t;                         /* CLOCK_REALTIME, seconds */
 
-    uint64_t ram_used_mb, ram_total_mb;
+    uint64_t ram_used_mb, ram_total_mb, ram_avail_mb;
     int      ram_ok;
+
+    /* Swap. total_mb == 0 with swap_ok == 1 is a reading - "none configured" -
+     * and is not the same as swap_ok == 0, which means /proc/meminfo did not
+     * carry the fields at all. */
+    uint64_t swap_used_mb, swap_total_mb;
+    int      swap_ok;
+
+    /* Seconds since boot, from /proc/uptime. A consumer displaying "up N" needs
+     * this; t alone cannot give it, since the wall clock says nothing about when
+     * the board started - and this board has no battery-backed RTC. */
+    uint64_t uptime_s;
+    int      uptime_ok;
 
     struct {
         uint64_t mhz;

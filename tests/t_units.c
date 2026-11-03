@@ -282,6 +282,77 @@ static void t_net_classifies_by_more_than_arphrd(void)
 
 /* A counter that cannot be read must not report 0, which is exactly what an
  * idle link genuinely reports. Same rule as power's three attributes. */
+static void t_uptime_is_whole_seconds_and_absent_when_missing(void)
+{
+    struct sample s;
+
+    /* The file's first field is a float; a consumer formats "up 3d 4h" from whole
+     * seconds, and sub-second precision in an uptime is noise. */
+    put("proc/uptime", "21085.50 167000.92\n");
+    io_set_sysroot(dir);
+    T_REQUIRE(sampler_uptime.open() == 0, "uptime opens");
+    memset(&s, 0, sizeof s);
+    sampler_uptime.read(&s);
+    T_TRUE(s.uptime_ok, "uptime reads");
+    T_EQ_U64(s.uptime_s, 21085, "and is truncated to whole seconds, not rounded");
+    sampler_uptime.close();
+
+    /* Garbage is not a small uptime. */
+    put("proc/uptime", "not-a-number\n");
+    T_REQUIRE(sampler_uptime.open() == 0, "uptime opens on a readable file");
+    memset(&s, 0, sizeof s);
+    sampler_uptime.read(&s);
+    T_TRUE(!s.uptime_ok, "an unparseable uptime is absent");
+    T_EQ_U64(s.uptime_s, 0, "and no number is invented for it");
+    sampler_uptime.close();
+}
+
+static void t_swap_none_configured_is_a_reading_not_absence(void)
+{
+    struct sample s;
+
+    /* THE distinction. A kernel with swap support and nothing swapped on carries
+     * SwapTotal: 0 - that is the reading "none configured". A kernel built without
+     * swap carries no SwapTotal line at all, which is absence. Reporting both as
+     * zero would tell a reader the same thing about two different machines. */
+    put("proc/meminfo",
+        "MemTotal:       15651824 kB\n"
+        "MemAvailable:   14293884 kB\n"
+        "SwapTotal:             0 kB\n"
+        "SwapFree:              0 kB\n");
+    io_set_sysroot(dir);
+    T_REQUIRE(sampler_mem.open() == 0, "mem opens");
+    memset(&s, 0, sizeof s);
+    sampler_mem.read(&s);
+    T_TRUE(s.swap_ok, "SwapTotal: 0 is a reading");
+    T_EQ_U64(s.swap_total_mb, 0, "with a total of zero");
+    T_EQ_U64(s.swap_used_mb, 0, "and nothing used");
+    T_EQ_U64(s.ram_avail_mb, 14293884 / 1024, "and available is reported, not just used");
+    sampler_mem.close();
+
+    /* No swap fields at all. */
+    put("proc/meminfo",
+        "MemTotal:       15651824 kB\n"
+        "MemAvailable:   14293884 kB\n");
+    T_REQUIRE(sampler_mem.open() == 0, "mem opens without swap fields");
+    memset(&s, 0, sizeof s);
+    sampler_mem.read(&s);
+    T_TRUE(s.ram_ok, "RAM still reads");
+    T_TRUE(!s.swap_ok, "and swap is absent, which is not a swap of size zero");
+    sampler_mem.close();
+
+    /* One field without the other is not half an answer. */
+    put("proc/meminfo",
+        "MemTotal:       15651824 kB\n"
+        "MemAvailable:   14293884 kB\n"
+        "SwapTotal:       2097148 kB\n");
+    T_REQUIRE(sampler_mem.open() == 0, "mem opens with SwapTotal alone");
+    memset(&s, 0, sizeof s);
+    sampler_mem.read(&s);
+    T_TRUE(!s.swap_ok, "SwapTotal without SwapFree is absent, not a full swap");
+    sampler_mem.close();
+}
+
 static void t_net_an_unreadable_counter_is_not_zero(void)
 {
     struct sample s;
@@ -333,6 +404,8 @@ int main(void)
     t_throttle_sums_every_cpu_column();
     t_net_classifies_by_more_than_arphrd();
     t_net_an_unreadable_counter_is_not_zero();
+    t_uptime_is_whole_seconds_and_absent_when_missing();
+    t_swap_none_configured_is_a_reading_not_absence();
 
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", dir);
     if (system(cmd) != 0)

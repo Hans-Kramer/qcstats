@@ -18,6 +18,7 @@
 #define THERMAL_DIR     "/sys/class/thermal"
 #define PROC_STAT       "/proc/stat"
 #define PROC_MEMINFO    "/proc/meminfo"
+#define PROC_UPTIME     "/proc/uptime"
 #define PROC_INTERRUPTS "/proc/interrupts"
 
 // hwmon indices are NOT stable across boots - resolve by the name attribute.

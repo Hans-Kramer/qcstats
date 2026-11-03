@@ -98,9 +98,14 @@ It is **not** bumped for a new field.
 |---|---|---|---|
 | `v` | int | — | schema version; `1` |
 | `t` | float | seconds | `CLOCK_REALTIME`, ms precision. For correlating against other logs |
+| `uptime_s` | int \| null | seconds | since boot, whole seconds. **Not derivable from `t`**: the wall clock says nothing about when the board started, and this board has no battery-backed RTC |
 | `ram` | object \| null | | |
 | `ram.used_mb` | int | MiB | `MemTotal - MemAvailable` |
 | `ram.total_mb` | int | MiB | |
+| `ram.available_mb` | int | MiB | `MemAvailable` — what a workload can actually get, which is not `total - used` plus cache |
+| `swap` | object \| null | | `null` means `/proc/meminfo` carried no swap fields at all |
+| `swap.used_mb` | int | MiB | `SwapTotal - SwapFree` |
+| `swap.total_mb` | int | MiB | **`0` is a reading**, not absence: it means swap support exists and nothing is swapped on. A kernel built without swap gives `null` for the whole object |
 | `cpu` | array | | one entry per **cpufreq policy**, not per core — always 3 on this board |
 | `cpu[].label` | string | — | `A78C.0`, `A78C.1`, `A55` |
 | `cpu[].mhz` | int \| null | MHz | the **policy's** frequency; frequency is per policy, not per core |
@@ -221,6 +226,11 @@ directory or a `phy80211` link is what separates them.
 `--csv` carries the same data with a header row, which serves the same self-describing
 role as `v`. Its column set is **fixed for a run** and does not depend on which flags are passed,
 so header and rows always align. Absent is an **empty field** there — same rule, different spelling.
+
+`uptime_s` sits beside `t`, and `ram_available_mb`, `swap_used_mb` and `swap_total_mb`
+beside the other memory columns — so a reader that indexes by *position* rather than by
+header name sees those insertions as a change, exactly as it did when `net` was added. `v`
+is unchanged, because the JSON contract gained fields and broke none.
 
 `net` contributes twelve columns per interface, named
 `net_<iface>_<attr>` — eighty-four on this board, which is wide, but `--csv`

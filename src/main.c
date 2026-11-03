@@ -56,6 +56,7 @@ static void install_handlers(void)
  * here only affects which subsystem opens first. */
 static const struct sampler *const SAMPLERS[] = {
     &sampler_mem,
+    &sampler_uptime,
     &sampler_cpu,
     &sampler_gpu,
     &sampler_thermal,

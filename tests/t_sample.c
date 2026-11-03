@@ -181,7 +181,7 @@ static void t_the_transformations_hold(void)
         }
     }
     T_TRUE(total_kb > 1000000, "the fixture holds a plausible MemTotal");
-    snprintf(want, sizeof want, "\"total_mb\":%ld}", total_kb / 1024);
+    snprintf(want, sizeof want, "\"total_mb\":%ld,", total_kb / 1024);
     T_HAS(j, want, "memory total in MB, not kB");
 
     /* USED is the one with arithmetic in it: total minus available, and reporting

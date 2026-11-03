@@ -13,6 +13,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`uptime_s`, `ram.available_mb` and `swap`** — the first three gaps found by making
+  `qctop` a consumer of this stream rather than a second reader of the same files. All
+  additive, so `v` stays `1`.
+
+  `uptime_s` gets its own sampler (`src/uptime.c`) rather than a field hung off another,
+  because it answers a different kind of question: every other reading describes the board's
+  state now, and this one says how long it has been in any state. It is **not** derivable
+  from `t` — the wall clock says nothing about when the board started, and this board has no
+  battery-backed RTC, so the two are unrelated after a cold boot until NTP lands. Whole
+  seconds, truncated rather than rounded; an unparseable value is absent rather than a small
+  uptime.
+
+  `ram.available_mb` was already being read and then thrown away: `used` is
+  `MemTotal - MemAvailable`, so the number existed and only the total and the difference were
+  published. `MemAvailable` is the kernel's own estimate of what a new workload can get, and
+  no arithmetic on the other two reproduces it.
+
+  `swap` is where the care went. `SwapTotal: 0` means swap support exists and nothing is
+  swapped on - **a reading**. A kernel built without swap carries no swap lines at all -
+  absence. The two must not look alike, so the object is `null` in the second case and
+  `{"used_mb":0,"total_mb":0}` in the first, and one field without the other is absence
+  rather than half an answer. Three mutations prove it: reporting swap when the fields were
+  missing reddens two checks, rounding the uptime reddens one, and dropping `available`
+  reddens one.
+
+  Four existing assertions had pinned the old shapes - the whole `ram` object, the closing
+  brace after `total_mb`, and the CSV header prefix in two files. They were right to and are
+  now pinned to the new complete shapes rather than loosened.
+
+  In `--csv` the new columns sit beside their relatives, so a reader indexing by position
+  rather than by header name sees an insertion - the same note the `net` columns already
+  carry.
+
+
+### Added
+
 - **The temperature sensors no thermal zone covers.** `thermal_c` was built from
   `/sys/class/thermal/thermal_zone*` alone, so `ath11k_hwmon` — the Wi-Fi radio, which
   exists only under `/sys/class/hwmon` — was never sampled. It is the hottest sensor on

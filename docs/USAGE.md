@@ -274,6 +274,31 @@ whole tool as root would buy you nothing but `--gpu-busy`: root unlocks no furth
 here, since `qcom_aoss/ddr_frequency_mhz` is mode `220` — write-only even for root — and
 `interconnect_summary` holds bandwidth *votes*, not traffic counters.
 
+### Memory, swap and uptime
+
+`ram` carries `used_mb`, `total_mb` and `available_mb`. Used is `MemTotal - MemAvailable`,
+and *available* is reported alongside it rather than left to be derived, because
+`MemAvailable` is the kernel's own estimate of what a new workload can actually get —
+reclaimable page cache included — and no arithmetic on the other two reproduces it.
+
+`swap` is an object or `null`, and the difference is the one worth getting right:
+
+| | |
+|---|---|
+| `"swap":{"used_mb":0,"total_mb":0}` | swap support exists and nothing is swapped on — **a reading** |
+| `"swap":null` | `/proc/meminfo` carried no swap fields at all — absence |
+
+A kernel built without swap gives the second. Reporting both as zero would say the same
+thing about two different machines.
+
+`uptime_s` is whole seconds since boot. It is **not** derivable from `t`: the wall clock
+says nothing about when the board started, and this board has no battery-backed RTC, so
+after a cold boot the two are unrelated until NTP lands. Sub-second precision is dropped
+rather than rounded — 21085.50 reads as 21085.
+
+Neither appears in `--plain`, which is the compact human form and already carries a subset;
+both are in `--json` and `--csv`, which are the formats with a contract.
+
 ### Network — every interface, with its kind named
 
 One entry per interface, resolved **once at startup** and reported in a fixed order:
