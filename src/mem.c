@@ -27,8 +27,9 @@ static void mem_sample(struct sample *s)
 {
     int rc;
     static char blob[8192];
-    uint64_t total = 0, avail = 0, swtotal = 0, swfree = 0;
-    int have_total = 0, have_avail = 0, have_swtotal = 0, have_swfree = 0;
+    uint64_t total = 0, avail = 0, free_kb = 0, swtotal = 0, swfree = 0;
+    int have_total = 0, have_avail = 0, have_free = 0;
+    int have_swtotal = 0, have_swfree = 0;
     char *line, *save = NULL;
 
     /* The whole file is parsed, so a read that stopped at the buffer is not usable: the
@@ -51,6 +52,8 @@ static void mem_sample(struct sample *s)
             have_total = 1;
         if (sscanf(line, "MemAvailable: %lu kB", &avail) == 1)
             have_avail = 1;
+        if (sscanf(line, "MemFree: %lu kB", &free_kb) == 1)
+            have_free = 1;
         if (sscanf(line, "SwapTotal: %lu kB", &swtotal) == 1)
             have_swtotal = 1;
         if (sscanf(line, "SwapFree: %lu kB", &swfree) == 1)
@@ -63,6 +66,14 @@ static void mem_sample(struct sample *s)
     s->ram_used_mb  = (total - avail) / 1024;
     s->ram_total_mb = total / 1024;
     s->ram_avail_mb = avail / 1024;
+    /* MemFree is reported BESIDE available, not instead of it. Free excludes
+     * reclaimable page cache and understates what a workload can get, which is
+     * why `used` is computed from available - but a reader comparing the two
+     * learns how much is cache, and that is a real question. */
+    if (have_free) {
+        s->ram_free_mb = free_kb / 1024;
+        s->ram_free_ok = 1;
+    }
     s->ram_ok = 1;
 
     /* Both fields or neither. A kernel built without swap carries no SwapTotal line

@@ -276,10 +276,13 @@ here, since `qcom_aoss/ddr_frequency_mhz` is mode `220` — write-only even for 
 
 ### Memory, swap and uptime
 
-`ram` carries `used_mb`, `total_mb` and `available_mb`. Used is `MemTotal - MemAvailable`,
-and *available* is reported alongside it rather than left to be derived, because
-`MemAvailable` is the kernel's own estimate of what a new workload can actually get —
-reclaimable page cache included — and no arithmetic on the other two reproduces it.
+`ram` carries `used_mb`, `total_mb`, `available_mb` and `free_mb`. Used is
+`MemTotal - MemAvailable`, and *available* is reported alongside it rather than left to be
+derived, because `MemAvailable` is the kernel's own estimate of what a new workload can
+actually get — reclaimable page cache included — and no arithmetic on the other two
+reproduces it. `free_mb` is `MemFree`, which excludes that cache: the gap between free and
+available is roughly what the cache holds. It is `null`, never `0`, when the kernel did not
+report it.
 
 `swap` is an object or `null`, and the difference is the one worth getting right:
 

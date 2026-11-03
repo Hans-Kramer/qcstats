@@ -130,7 +130,7 @@ static void t_present_values_are_emitted(void)
     memset(&s, 0, sizeof s);
     s.t = 1.5;
     s.ram_ok = 1; s.ram_used_mb = 1024; s.ram_total_mb = 7777;
-    s.ram_avail_mb = 6753;
+    s.ram_avail_mb = 6753; s.ram_free_mb = 311; s.ram_free_ok = 1;
     s.swap_ok = 1; s.swap_used_mb = 128; s.swap_total_mb = 2048;
     s.uptime_ok = 1; s.uptime_s = 98765;
     s.pol[0].mhz_ok = 1; s.pol[0].mhz = 2112;
@@ -141,7 +141,8 @@ static void t_present_values_are_emitted(void)
     s.zone[0].ok = 1; s.zone[0].c = 36.8;
     j = emitted(&s);
 
-    T_HAS(j, "\"ram\":{\"used_mb\":1024,\"total_mb\":7777,\"available_mb\":6753}",
+    T_HAS(j, "\"ram\":{\"used_mb\":1024,\"total_mb\":7777,\"available_mb\":6753,"
+          "\"free_mb\":311}",
           "RAM is an object, and available is part of it");
     T_HAS(j, "\"swap\":{\"used_mb\":128,\"total_mb\":2048}", "so is swap");
     T_HAS(j, "\"uptime_s\":98765", "uptime is whole seconds, beside t");
@@ -221,7 +222,7 @@ static void full_sample(struct sample *s)
     memset(s, 0, sizeof *s);
     s->t = 1792417016.024;
     s->ram_ok = 1; s->ram_used_mb = 1326; s->ram_total_mb = 15284;
-    s->ram_avail_mb = 13958;
+    s->ram_avail_mb = 13958; s->ram_free_mb = 402; s->ram_free_ok = 1;
     s->swap_ok = 1; s->swap_used_mb = 0; s->swap_total_mb = 0;
     s->uptime_ok = 1; s->uptime_s = 21085;
 
@@ -274,11 +275,12 @@ static void t_the_csv_header_and_row_line_up(void)
     T_TRUE(hn > 20, "and there are a couple of dozen of them, not a handful");
 
     T_HAS(header,
-          "t,uptime_s,ram_used_mb,ram_total_mb,ram_available_mb,swap_used_mb,swap_total_mb",
+          "t,uptime_s,ram_used_mb,ram_total_mb,ram_available_mb,ram_free_mb"
+          ",swap_used_mb,swap_total_mb",
           "the header starts with time, uptime, RAM and swap");
     T_HAS(header, "power_mw,power_mv,power_ma", "and carries all three power columns");
     T_HAS(header, "temp_cpuss-0-0_c", "with one column per zone, named for the zone");
-    T_HAS(row, "21085,1326,15284,13958,0,0",
+    T_HAS(row, "21085,1326,15284,13958,402,0,0",
           "and the row carries uptime, the RAM values and swap in that order");
     T_HAS(row, "11440,20062,574", "and the power values in theirs");
     T_HASNT(row, "\"", "a row of ordinary values needs no quoting");

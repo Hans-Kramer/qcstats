@@ -41,8 +41,11 @@ struct net_counter { uint64_t v; int ok; };
 struct sample {
     double   t;                         /* CLOCK_REALTIME, seconds */
 
-    uint64_t ram_used_mb, ram_total_mb, ram_avail_mb;
+    uint64_t ram_used_mb, ram_total_mb, ram_avail_mb, ram_free_mb;
     int      ram_ok;
+    /* MemFree has its own flag: a kernel that did not report it must not read
+     * as a board with no free memory. */
+    int      ram_free_ok;
 
     /* Swap. total_mb == 0 with swap_ok == 1 is a reading - "none configured" -
      * and is not the same as swap_ok == 0, which means /proc/meminfo did not

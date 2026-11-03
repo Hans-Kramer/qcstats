@@ -103,6 +103,7 @@ It is **not** bumped for a new field.
 | `ram.used_mb` | int | MiB | `MemTotal - MemAvailable` |
 | `ram.total_mb` | int | MiB | |
 | `ram.available_mb` | int | MiB | `MemAvailable` — what a workload can actually get, which is not `total - used` plus cache |
+| `ram.free_mb` | int \| null | MiB | `MemFree`, reported **beside** available rather than instead of it: free excludes reclaimable page cache, so the gap between the two is roughly what the cache holds. `null` when the kernel did not report it — never `0`, which would read as a board with no free memory |
 | `swap` | object \| null | | `null` means `/proc/meminfo` carried no swap fields at all |
 | `swap.used_mb` | int | MiB | `SwapTotal - SwapFree` |
 | `swap.total_mb` | int | MiB | **`0` is a reading**, not absence: it means swap support exists and nothing is swapped on. A kernel built without swap gives `null` for the whole object |
@@ -227,7 +228,7 @@ directory or a `phy80211` link is what separates them.
 role as `v`. Its column set is **fixed for a run** and does not depend on which flags are passed,
 so header and rows always align. Absent is an **empty field** there — same rule, different spelling.
 
-`uptime_s` sits beside `t`, and `ram_available_mb`, `swap_used_mb` and `swap_total_mb`
+`uptime_s` sits beside `t`, and `ram_available_mb`, `ram_free_mb`, `swap_used_mb` and `swap_total_mb`
 beside the other memory columns — so a reader that indexes by *position* rather than by
 header name sees those insertions as a change, exactly as it did when `net` was added. `v`
 is unchanged, because the JSON contract gained fields and broke none.

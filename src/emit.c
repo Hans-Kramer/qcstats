@@ -215,8 +215,16 @@ void emit_json(const struct sample *s)
 
     fprintf(stream(), ",\"ram\":");
     if (s->ram_ok)
-        fprintf(stream(), "{\"used_mb\":%lu,\"total_mb\":%lu,\"available_mb\":%lu}",
-                s->ram_used_mb, s->ram_total_mb, s->ram_avail_mb);
+        {
+            fprintf(stream(),
+                    "{\"used_mb\":%lu,\"total_mb\":%lu,\"available_mb\":%lu,"
+                    "\"free_mb\":",
+                    s->ram_used_mb, s->ram_total_mb, s->ram_avail_mb);
+            if (s->ram_free_ok)
+                fprintf(stream(), "%lu}", s->ram_free_mb);
+            else
+                fprintf(stream(), "null}");
+        }
     else
         fprintf(stream(), "null");
 
@@ -382,7 +390,7 @@ static void csv_named(const char *prefix, const char *label, const char *suffix)
 void emit_csv_header(const struct sample *s)
 {
     fprintf(stream(), "t,uptime_s,ram_used_mb,ram_total_mb,ram_available_mb"
-                      ",swap_used_mb,swap_total_mb");
+                      ",ram_free_mb,swap_used_mb,swap_total_mb");
     for (int p = 0; p < NPOLICY; p++) {
         fprintf(stream(), ",");
         csv_named("", POLICY_LABEL[p], "_mhz");
@@ -433,10 +441,14 @@ void emit_csv(const struct sample *s)
         fprintf(stream(), "%lu", s->uptime_s);
     fprintf(stream(), ",");
     if (s->ram_ok)
-        fprintf(stream(), "%lu,%lu,%lu", s->ram_used_mb, s->ram_total_mb,
+    {
+        fprintf(stream(), "%lu,%lu,%lu,", s->ram_used_mb, s->ram_total_mb,
                 s->ram_avail_mb);
+        if (s->ram_free_ok)
+            fprintf(stream(), "%lu", s->ram_free_mb);
+    }
     else
-        fprintf(stream(), ",,");
+        fprintf(stream(), ",,,");
     fprintf(stream(), ",");
     if (s->swap_ok)
         fprintf(stream(), "%lu,%lu", s->swap_used_mb, s->swap_total_mb);

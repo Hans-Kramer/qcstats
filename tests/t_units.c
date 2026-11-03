@@ -317,6 +317,7 @@ static void t_swap_none_configured_is_a_reading_not_absence(void)
      * zero would tell a reader the same thing about two different machines. */
     put("proc/meminfo",
         "MemTotal:       15651824 kB\n"
+        "MemFree:          501760 kB\n"
         "MemAvailable:   14293884 kB\n"
         "SwapTotal:             0 kB\n"
         "SwapFree:              0 kB\n");
@@ -328,17 +329,19 @@ static void t_swap_none_configured_is_a_reading_not_absence(void)
     T_EQ_U64(s.swap_total_mb, 0, "with a total of zero");
     T_EQ_U64(s.swap_used_mb, 0, "and nothing used");
     T_EQ_U64(s.ram_avail_mb, 14293884 / 1024, "and available is reported, not just used");
+    T_EQ_U64(s.ram_free_mb, 501760 / 1024, "and free beside it, which is a different number");
     sampler_mem.close();
 
     /* No swap fields at all. */
     put("proc/meminfo",
         "MemTotal:       15651824 kB\n"
-        "MemAvailable:   14293884 kB\n");
+        "MemAvailable:   14293884 kB\n");   /* no MemFree either */
     T_REQUIRE(sampler_mem.open() == 0, "mem opens without swap fields");
     memset(&s, 0, sizeof s);
     sampler_mem.read(&s);
     T_TRUE(s.ram_ok, "RAM still reads");
     T_TRUE(!s.swap_ok, "and swap is absent, which is not a swap of size zero");
+    T_TRUE(!s.ram_free_ok, "MemFree absent is absent too, not zero bytes free");
     sampler_mem.close();
 
     /* One field without the other is not half an answer. */
