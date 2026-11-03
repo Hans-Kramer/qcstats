@@ -37,7 +37,7 @@ SRCS   := $(SRCDIR)/main.c $(SRCDIR)/io.c $(SRCDIR)/emit.c \
           $(SRCDIR)/power.c $(SRCDIR)/fan.c $(SRCDIR)/throttle.c \
           $(SRCDIR)/net.c $(SRCDIR)/npu.c \
           $(SRCDIR)/gputrace.c $(SRCDIR)/envid.c \
-          $(SRCDIR)/uptime.c
+          $(SRCDIR)/uptime.c $(SRCDIR)/registry.c
 OBJS   := $(SRCS:.c=.o)
 DEPS   := $(OBJS:.o=.d)
 

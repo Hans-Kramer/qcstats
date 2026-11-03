@@ -26,10 +26,6 @@
 
 static char buf[16384];
 
-static const struct sampler *const ALL[] = {
-    &sampler_mem, &sampler_cpu, &sampler_gpu, &sampler_thermal,
-    &sampler_power, &sampler_fan, &sampler_throttle, &sampler_npu,
-};
 
 /* Sample `times` and return the last line's JSON. Twice is the interesting number: the
  * load percentage needs two readings of /proc/stat, and a fixture's second reading is
@@ -45,13 +41,13 @@ static const char *sample_json(int times)
         buf[0] = '\0';
         return buf;
     }
-    for (size_t i = 0; i < sizeof ALL / sizeof ALL[0]; i++)
-        ALL[i]->open();
+    for (size_t i = 0; i < qcstats_nsamplers; i++)
+        qcstats_samplers[i]->open();
     emit_to(f);
     for (int k = 0; k < times; k++) {
         memset(&s, 0, sizeof s);
-        for (size_t i = 0; i < sizeof ALL / sizeof ALL[0]; i++)
-            ALL[i]->read(&s);
+        for (size_t i = 0; i < qcstats_nsamplers; i++)
+            qcstats_samplers[i]->read(&s);
         rewind(f);
         /* Keep only the last line: the earlier samples exist to prime the load delta. */
         if (ftruncate(fileno(f), 0) != 0)
@@ -64,8 +60,8 @@ static const char *sample_json(int times)
     buf[n > 0 ? n : 0] = '\0';
     fclose(f);
     emit_to(stdout);
-    for (size_t i = 0; i < sizeof ALL / sizeof ALL[0]; i++)
-        ALL[i]->close();
+    for (size_t i = 0; i < qcstats_nsamplers; i++)
+        qcstats_samplers[i]->close();
     return buf;
 }
 
@@ -266,7 +262,8 @@ static void t_a_missing_tree_is_all_absence(void)
     /* Not an error: every source is optional at runtime, and a sampler that finds nothing
      * reports nothing rather than failing. This is also what running on the wrong board
      * would look like. The power sampler's "ina232 hwmon not found" on stderr during this
-     * case is the sampler saying so, and is expected output of the test. */
+     * case is the sampler saying so, and is expected output of the test - as is net.c's
+     * "/sys/class/net unreadable; no network section", for the same reason. */
     io_set_sysroot("tests/fixtures/does-not-exist");
     j = sample_json(2);
     io_set_sysroot("");
@@ -349,6 +346,68 @@ static void t_a_named_hwmon_sensor_resolves(void)
     T_HASNT(j, "\"cpuss-0-0\":", "and nothing else is");
 }
 
+
+/*
+ * The network surface, which no fixture could reach until now.
+ *
+ * capture-fixture.sh had no /sys/class/net section, so every run against the fixture took
+ * net.c's "unreadable; no network section" path and the classifier never ran once. This
+ * board carries five of the seven kinds it can report, which is why a captured tree is
+ * worth more here than a synthetic one: the awkward combinations are real.
+ */
+static void t_the_network_surface_classifies_every_kind(void)
+{
+    const char *j;
+    char want[128];
+    long rx, drop;
+
+    io_set_sysroot(FIXTURE);
+    j = sample_json(2);
+    io_set_sysroot("");
+
+    /* ARPHRD cannot separate these: docker0, end0 and wlp3s0 all report type 1, so each
+     * line below is a different piece of evidence being believed. */
+    T_HAS(j, "\"name\":\"end0\",\"kind\":\"ethernet\"", "a wired port is ethernet");
+    T_HAS(j, "\"name\":\"wlp3s0\",\"kind\":\"wifi\"",
+          "a station reporting ARPHRD_ETHER is wifi by its wireless directory");
+    T_HAS(j, "\"name\":\"docker0\",\"kind\":\"bridge\"",
+          "and a bridge by its bridge directory");
+    T_HAS(j, "\"name\":\"lo\",\"kind\":\"loopback\"", "loopback comes from ARPHRD alone");
+
+    /* can0 is a USB-attached adapter and is classified by ARPHRD_CAN, before anything
+     * looks at the bus - mutate that comparison and this interface falls through to
+     * "other".
+     *
+     * The absence of the usb kind below is NOT that ordering working. The usb branch
+     * reads `device` with readlink(), which hands back the RELATIVE text
+     * "../../../3-1:1.0"; only the resolved path holds "usb". So the usb kind cannot be
+     * reached on this board, or on any other - see TODO.md. This asserts the behaviour
+     * that exists, and is named for what it actually shows. */
+    T_HAS(j, "\"name\":\"can0\",\"kind\":\"can\"", "an ARPHRD_CAN link is can");
+    T_HASNT(j, "\"kind\":\"usb\"", "and the usb kind appears nowhere, reachable or not");
+
+    /* Schema rule 1 on a source that is genuinely refused rather than merely zero:
+     * reading `carrier` on a down CAN link returns EINVAL, so the capture left it out. */
+    T_HAS(j, "\"name\":\"can0\",\"kind\":\"can\",\"operstate\":\"down\",\"carrier\":null",
+          "a refused carrier is null");
+    T_HAS(j, "\"name\":\"docker0\",\"kind\":\"bridge\",\"operstate\":\"down\",\"carrier\":0",
+          "and one that is readable and reads 0 stays 0");
+
+    /* speed is refused on every interface here - EINVAL on CAN and loopback, and -1 on a
+     * down ethernet port, which src_u64() will not parse. None of that is a zero. */
+    T_HASNT(j, "\"speed_mbit\":0", "an unreadable link speed is not zero");
+
+    /* Counters read out of the fixture rather than written in here, so a later recapture
+     * moves the expectation with the tree instead of breaking the test. */
+    rx   = fixture_long("sys/class/net/wlp3s0/statistics/rx_bytes");
+    drop = fixture_long("sys/class/net/wlp3s0/statistics/rx_dropped");
+    T_TRUE(rx > 0 && drop > 0, "the fixture holds the counters this asserts on");
+    snprintf(want, sizeof want, "\"rx_bytes\":%ld", rx);
+    T_HAS(j, want, "a byte counter reaches the output unscaled");
+    snprintf(want, sizeof want, "\"rx_dropped\":%ld", drop);
+    T_HAS(j, want, "and so does a non-zero drop count");
+}
+
 int main(void)
 {
     t_the_transformations_hold();
@@ -357,5 +416,6 @@ int main(void)
     t_a_missing_tree_is_all_absence();
     t_a_sensor_with_no_zone_reaches_the_output();
     t_a_named_hwmon_sensor_resolves();
+    t_the_network_surface_classifies_every_kind();
     return t_summary("sample");
 }

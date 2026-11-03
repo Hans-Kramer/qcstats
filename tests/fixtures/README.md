@@ -14,7 +14,7 @@ satisfy.
 
 | fixture | board image | kernel | files | content |
 |---|---|---|---|---|
-| `monza-20260710-235-6.8.0-1084` | `BUILD_ID=20260710-235` | `6.8.0-1084-qcom` | 1153 | 37 KB |
+| `monza-20260710-235-6.8.0-1084` | `BUILD_ID=20260710-235` | `6.8.0-1084-qcom` | 1242 | 37 KB |
 
 Each tree carries a `.capture` file recording when it was taken, from which host, kernel,
 architecture, build id and model — so a fixture that has gone stale can be recognised as one
@@ -57,3 +57,25 @@ attribute's mode is exactly what a reader needs to see, and an archive hides it.
 Nothing here identifies the machine it came from: `etc/` holds only the published `BUILD_ID`,
 and there is no hostname, machine-id, cmdline or MAC in the tree. `capture-fixture.sh` takes
 only the paths this project reads, which is why that script is the authoritative list.
+
+## Copying one of these trees
+
+Use `tar`, not `scp -r` or `cp` without `-a`. The tree contains symlinks that carry meaning —
+a zone's `cdevN`, an interface's `device` — and `scp -r` dereferences them, turning each into
+a copied file or a recursively copied directory. That silently produces a tree that still
+passes a file count and no longer tests what it was taken for.
+
+    ssh board 'tar -C /tmp/fx -cf - .' | tar -C tests/fixtures/<name> -xf -
+
+## Indices in these trees are per-boot, and names are not
+
+Between the first capture of this fixture and its re-capture, **18 of 48 thermal zone
+indices changed identity** — `thermal_zone13` was `cpu-1-0-1-thermal` and became
+`pmm8650au_1_sdram` — and `hwmon4`/`hwmon5`/`hwmon6` shuffled, moving `ina232` from hwmon6 to
+hwmon4. The shuffle is confined to the range where PMIC zones interleave with SoC ones, which
+is a driver probe-order race and not something a caller can predict.
+
+Nothing here reads an index to decide what a sensor *is*: zones are matched on `type` and
+hwmons on `name`, which is why a re-capture changed no expectation. Tests that name an index
+do so only to read a value back out of this frozen tree, never to assert what lives there on a
+live board.

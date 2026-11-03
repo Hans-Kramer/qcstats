@@ -13,6 +13,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The fixture now carries `/sys/class/net`, and the samplers under test are the program's
+  own list.** `capture-fixture.sh` had no network section, so every fixture-driven run took
+  `net.c`'s "unreadable; no network section" path: the classifier had never once run against
+  a captured tree. The re-capture adds 100 files and the board turns out to carry five of the
+  seven kinds `iface_kind()` can return — `ethernet`, `wifi`, `bridge`, `loopback` and three
+  `can` links — which is more than a synthetic tree would have been shaped to try.
+
+  Capturing it needed two fixes to the script. An interface's `device` link is relative but
+  points outside the captured set, and a tree holding a dangling link cannot be copied by
+  `scp -r` or `cp -L`; `grab_dev_link()` now creates an empty stub directory at the resolved
+  target, which keeps the link text — all `readlink()` hands the classifier — and leaves the
+  tree copyable. The script also reported its own size with `du -sh`, which counts a 4 KB
+  block per tiny file and called a 37 KB tree 5.5 MB.
+
+  Separately, `tests/t_sample.c` kept its **own copy** of the sampler list, and the copy had
+  drifted: `sampler_uptime` and `sampler_net` reached the binary and were never sampled by
+  it. The list now lives in `src/registry.c` and both the program and the tests read it, so a
+  new sampler cannot be added to one and missed by the other. `sampler_gpu_busy` is safe to
+  include because its `open()` refuses unless `--gpu-busy` set the flag.
+
+  Twelve new checks, each proven failable by mutating `src/net.c`: breaking the `ARPHRD_CAN`
+  comparison reddens three, and making a refused source report `0` instead of absent reddens
+  seven across two files.
+
+### Fixed
+
+- **Nothing in behaviour** — but the re-capture turned up two things worth recording. A
+  defect is now open in `TODO.md`: `kind` can never be `"usb"`, because the branch searches
+  `readlink()`'s relative text for `usb` and sysfs `device` links are always relative. And
+  the board's **thermal zone and hwmon indices are not stable across boots** — 18 of 48 zone
+  indices changed identity between the two captures, and `ina232` moved from `hwmon6` to
+  `hwmon4`. Nothing here reads an index to decide what a sensor is, which is why no
+  expectation moved; `tests/fixtures/README.md` now says so, so the next reader does not
+  learn it the hard way.
+
 - **`uptime_s`, `ram.available_mb` and `swap`** — the first three gaps found by making
   `qctop` a consumer of this stream rather than a second reader of the same files. All
   additive, so `v` stays `1`.

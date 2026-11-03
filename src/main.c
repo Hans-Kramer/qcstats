@@ -52,22 +52,6 @@ static void install_handlers(void)
     sigaction(SIGHUP,  &sa, NULL);
 }
 
-/* Output field order comes from the emitters, not from this list, so the order
- * here only affects which subsystem opens first. */
-static const struct sampler *const SAMPLERS[] = {
-    &sampler_mem,
-    &sampler_uptime,
-    &sampler_cpu,
-    &sampler_gpu,
-    &sampler_thermal,
-    &sampler_power,
-    &sampler_fan,
-    &sampler_throttle,
-    &sampler_net,
-    &sampler_npu,
-    &sampler_gpu_busy,      /* opt-in; writes to tracefs, see src/gputrace.c */
-};
-#define NSAMPLERS (sizeof SAMPLERS / sizeof SAMPLERS[0])
 
 enum out_mode { OUT_HUMAN, OUT_JSON, OUT_CSV };
 
@@ -297,8 +281,8 @@ int main(int argc, char *argv[])
     envid_read(&envi);
     emit_set_env(&envi);
 
-    for (size_t i = 0; i < NSAMPLERS; i++)
-        SAMPLERS[i]->open();
+    for (size_t i = 0; i < qcstats_nsamplers; i++)
+        qcstats_samplers[i]->open();
 
     /* Absolute monotonic deadlines, not usleep(interval) after the work. Sleeping
      * for the interval ADDS the sampling cost to it: measured on the board, 60
@@ -332,8 +316,8 @@ int main(int argc, char *argv[])
         memset(&s, 0, sizeof s);
         s.t = (clock_gettime(CLOCK_REALTIME, &ts) == 0)
             ? (double)ts.tv_sec + (double)ts.tv_nsec / 1e9 : 0.0;
-        for (size_t i = 0; i < NSAMPLERS; i++)
-            SAMPLERS[i]->read(&s);
+        for (size_t i = 0; i < qcstats_nsamplers; i++)
+            qcstats_samplers[i]->read(&s);
 
         /* The CSV column set comes from the resolved sources, so the header can
          * only be written once a sample exists to describe. */
@@ -355,8 +339,8 @@ int main(int argc, char *argv[])
     }
 
 done:
-    for (size_t i = 0; i < NSAMPLERS; i++)
-        SAMPLERS[i]->close();
+    for (size_t i = 0; i < qcstats_nsamplers; i++)
+        qcstats_samplers[i]->close();
     if (logf)
         fclose(logf);
     return 0;

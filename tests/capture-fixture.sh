@@ -63,6 +63,24 @@ grab_link() {
     n=$((n + 1))
 }
 
+# grab_dev_link <absolute-path> - an interface's `device` link. Its target is relative but
+# points OUTSIDE the captured set, so copying the link alone leaves the tree with a dangling
+# entry, and a tree with one of those cannot be copied by `scp -r` or `cp -L`. An empty stub
+# directory at the resolved target keeps the link text - which is the only thing readlink()
+# hands the classifier - while leaving the tree copyable. The `..` components resolve against
+# the directories already built above, so this needs no realpath.
+grab_dev_link() {
+    [ -L "$1" ] || return 0
+    tgt=$(readlink "$1")
+    case "$tgt" in
+        /*) skipped=$((skipped + 1)); return 0 ;;
+    esac
+    mkdir -p "$OUT$(dirname "$1")"
+    ln -sfn "$tgt" "$OUT$1"
+    mkdir -p "$OUT$(dirname "$1")/$tgt"
+    n=$((n + 1))
+}
+
 echo "capturing into $OUT"
 
 # ---- thermal: zones, their trips, and the cooling devices they drive ----
@@ -110,6 +128,33 @@ for h in /sys/class/hwmon/hwmon*; do
               "$h"/temp[0-9]*
 done
 
+# ---- network: every interface, and the attributes that classify it ----
+# `speed` and `carrier` are refused with EINVAL on a down CAN link and on loopback, so
+# they land in the skipped count rather than as empty files - which is the honest record:
+# an absent source and an empty one mean the same thing to src_read().
+for i in /sys/class/net/*; do
+    [ -d "$i" ] || continue
+    grab_glob "$i"/type "$i"/operstate "$i"/carrier "$i"/mtu "$i"/speed
+    grab_glob "$i"/statistics/rx_bytes "$i"/statistics/tx_bytes \
+              "$i"/statistics/rx_packets "$i"/statistics/tx_packets \
+              "$i"/statistics/rx_errors "$i"/statistics/tx_errors \
+              "$i"/statistics/rx_dropped "$i"/statistics/tx_dropped
+    # `device` is read with readlink() and never followed, so a relative target that
+    # dangles inside the fixture still answers the only question asked of it: whether the
+    # parent chain runs through USB.
+    grab_dev_link "$i"/device
+    # wireless/phy80211/bridge are tested for EXISTENCE only, and open() on a directory
+    # succeeds - so an empty directory is a faithful capture of each marker. phy80211 is
+    # a symlink on this board, and is recorded as a directory for that reason: its target
+    # is nowhere near the captured set, and only its presence is ever read.
+    for m in wireless phy80211 bridge; do
+        if [ -e "$i/$m" ]; then
+            mkdir -p "$OUT$i/$m"
+            n=$((n + 1))
+        fi
+    done
+done
+
 # ---- procfs ----
 grab_glob /proc/stat /proc/meminfo /proc/interrupts /proc/loadavg /proc/uptime \
           /proc/sys/kernel/osrelease /proc/sys/kernel/sched_util_clamp_min \
@@ -133,4 +178,4 @@ grab /proc/device-tree/model
 
 echo "  $n files captured, $skipped unreadable and left out"
 echo "  provenance in $OUT/.capture"
-echo "  size: $(du -sh "$OUT" | cut -f1)"
+echo "  size: $(du -sh --apparent-size "$OUT" | cut -f1) of content"

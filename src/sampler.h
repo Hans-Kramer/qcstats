@@ -20,6 +20,8 @@
 
 #include "qcstats.h"
 
+#include <stddef.h>
+
 struct sampler {
     const char *name;
     int  (*open)(void);
@@ -40,6 +42,12 @@ extern const struct sampler sampler_throttle;
 extern const struct sampler sampler_net;
 extern const struct sampler sampler_npu;
 extern const struct sampler sampler_gpu_busy;
+
+// Every sampler the program has, in src/registry.c. The tests used to keep their own copy
+// of this list and it drifted: sampler_uptime and sampler_net reached the binary and were
+// never sampled by tests/t_sample.c. One list cannot drift from itself.
+extern const struct sampler *const qcstats_samplers[];
+extern const size_t qcstats_nsamplers;
 
 /* --gpu-busy is opt-in because it writes to the system and needs root; see
  * src/gputrace.c. gpu_busy_close_now() is idempotent and safe from a signal path,
