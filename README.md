@@ -40,6 +40,8 @@ VDD_IN 10800mW (20.1V 539mA) FAN 40%@2658rpm LMh [A78C.0:0 A78C.1:0 A55:0]
 - **Temperatures** — five zones by default, or any of the 48 the board exposes
 - **Power** — board input power, voltage and current from the INA232
 - **Fan** — duty cycle and measured rpm
+- **Network** — every interface with its kind spelled out (ethernet, Wi-Fi, CAN, USB,
+  bridge, loopback), link state, MTU, speed, and the eight byte/packet/error/drop counters
 - **Throttling** — LMh throttle events per cluster (counts since boot, not severity)
 
 Three output formats: `--plain` (default), `--json` (NDJSON, one object per sample) and

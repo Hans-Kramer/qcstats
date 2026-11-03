@@ -274,6 +274,55 @@ whole tool as root would buy you nothing but `--gpu-busy`: root unlocks no furth
 here, since `qcom_aoss/ddr_frequency_mhz` is mode `220` — write-only even for root — and
 `interconnect_summary` holds bandwidth *votes*, not traffic counters.
 
+### Network — every interface, with its kind named
+
+One entry per interface, resolved **once at startup** and reported in a fixed order:
+ethernet, Wi-Fi, CAN, USB, other, bridge, loopback, then by name. Seven on this board —
+Wi-Fi, Ethernet, three CAN buses, the Docker bridge and loopback.
+
+| Field | |
+|---|---|
+| `name` | the kernel's name for it — `wlp3s0`, `end0`, `can0` |
+| `kind` | `ethernet`, `wifi`, `can`, `usb`, `bridge`, `loopback` or `other` |
+| `operstate` | the link state string, `null` when it could not be read |
+| `carrier`, `mtu`, `speed_mbit` | `null` individually when the attribute is absent |
+| `rx_bytes`, `tx_bytes`, `rx_packets`, `tx_packets` | the traffic counters |
+| `rx_errors`, `tx_errors`, `rx_dropped`, `tx_dropped` | the fault counters |
+
+Three things to get right when consuming it:
+
+**The list does not grow mid-run.** It is resolved at startup for the same reason the
+thermal zones are: the CSV header written on the first line has to describe every row after
+it, and a list that grew would shift the columns under a reader. The cost is real and worth
+knowing — a USB CDC adapter or a container bridge plugged in *after* the run starts is
+missed for the rest of it. That matches the rule everywhere else here, that a source absent
+at startup stays absent, but this is the one case where the thing appearing later is
+something a person physically plugs in.
+
+**Counters are raw, not rates.** Two samples and the `t` on each is a division you can do;
+a rate computed here would be over *this* sampler's interval rather than yours, and the
+counters are what the kernel actually measured.
+
+**`kind` is not the `type` attribute alone.** ARPHRD identifies CAN (280) and loopback
+(772) outright, but a managed-mode Wi-Fi station reports ARPHRD_ETHER (1) exactly as a
+wired port does — so the `wireless/` directory or a `phy80211` link is what separates them.
+Getting that wrong mislabels every Wi-Fi adapter as Ethernet.
+
+CAN is one interface kind among the others rather than a section of its own. It is a
+transport that happens to hang off the MCU, and treating it as the whole of networking was
+the wrong shape.
+
+**In each output mode.** `--json` gives a `net` array of objects; `--csv` gives twelve
+columns per interface, named `net_<name>_<attr>` from that fixed order; the plain line
+prints `NET [name:kind …]`, listing only interfaces that are up — `down` says nothing worth
+the width, while `unknown`, which is what loopback and CAN report, is not down and is
+listed.
+
+Two different empties, and they mean different things: interfaces exist but none are up
+reads `NET [none up]`, whereas no interfaces could be resolved at startup omits the `NET`
+section altogether — absent rather than empty, the same distinction the rest of the output
+keeps.
+
 ### Not reported, and why
 
 - **DDR frequency** — nothing an unprivileged process can read. No DDR clock appears in

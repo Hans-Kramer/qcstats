@@ -12,8 +12,9 @@ qcstats \- telemetry sampler for the Arduino Ventuno Q
 samples the hardware telemetry of an Arduino Ventuno Q (Qualcomm QCS8275 /
 Dragonwing IQ\-8275) and prints one sample per line: per\-core CPU utilisation and
 per\-cluster frequency for all three frequency policies, memory in use, GPU
-frequency, thermal zone temperatures, board input power, fan duty and rpm, and the
-kernel's LMh throttle counters.
+frequency, thermal zone temperatures, board input power, fan duty and rpm, every
+network interface with its link state and counters, and the kernel's LMh throttle
+counters.
 .PP
 It reads only paths that exist on that board, and it writes nothing to the system \-
 with one opt\-in exception, see
@@ -22,6 +23,14 @@ below. It needs no privileges: CPU frequency comes from
 .IR scaling_cur_freq ,
 not from the root\-only
 .IR cpuinfo_cur_freq .
+.PP
+The network list is resolved
+.B once at startup,
+like the thermal zones, because the CSV header written on the first line has to
+describe every row after it. An adapter plugged in later is therefore missed for the
+rest of the run. Its counters are raw rather than rates: a consumer with two samples
+and the timestamp on each can divide, and a rate computed here would be over this
+sampler's interval instead of theirs.
 .PP
 Nothing is printed for the first interval. CPU percentages are a delta and need two
 .I /proc/stat

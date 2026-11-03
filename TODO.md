@@ -13,7 +13,11 @@ source and not yet confirmed on hardware.
 
 ## Gaps
 
-- **A second captured fixture.** `make test` runs 241 checks against one real tree, and
+- **A second captured fixture.** The one in the tree also predates the network sampler: it
+  carries no `/sys/class/net`, so the fixture-driven checks exercise no interface at all and
+  the plain line's `NET` section is absent rather than empty under it. A re-capture from the
+  same board would fix that half without needing a second board. `make test` runs 241 checks
+  against one real tree, and
   `tests/t_units.c` builds its own synthetic trees for the shapes nobody can capture. What
   is missing is another real board: one capture proves the code handles that capture.
   Blocked on hardware.
